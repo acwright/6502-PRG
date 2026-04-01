@@ -1,0 +1,252 @@
+ca65 V2.19 - Git 0fca83500
+Main file   : Program.asm
+Current file: Program.asm
+
+000000r 1               .setcpu "65C02"
+000000r 1               
+000000r 1               .include "6502.inc"
+000000r 2               ; ***                     ***
+000000r 2               ; ***   6502 INCLUDES     ***
+000000r 2               ; ***                     ***
+000000r 2               
+000000r 2               ; Zero Page
+000000r 2               ZP                  := $00
+000000r 2               READ_PTR            := $00
+000000r 2               WRITE_PTR           := $01
+000000r 2               STR_PTR             := $02               ; $02-$03 - String pointer (2 bytes)
+000000r 2               ; $04-$23 reserved by BASIC interpreter
+000000r 2               CF_BUF_PTR          := $24               ; $24-$25 - CF sector data buffer pointer (2 bytes)
+000000r 2               CF_LBA              := $26               ; $26-$29 - CF 28-bit LBA address (4 bytes, little-endian)
+000000r 2               XFER_PTR            := $2A               ; $2A-$2B - Serial transfer data pointer (2 bytes)
+000000r 2               DELAY_CNT           := $2C               ; $2C-$2D - SysDelay 16-bit centisecond counter
+000000r 2               ; Monitor ZP variables ($2E-$35)
+000000r 2               MON_ADDR            := $2E               ; $2E-$2F - Monitor current address (2 bytes)
+000000r 2               MON_END             := $30               ; $30-$31 - Monitor end address (2 bytes)
+000000r 2               MON_TMP             := $32               ; $32-$33 - Monitor temp pointer (2 bytes)
+000000r 2               MON_BYTE            := $34               ; $34     - Monitor parsed byte scratch
+000000r 2               MON_IDX             := $35               ; $35     - Monitor input line index
+000000r 2               
+000000r 2               ; Stack
+000000r 2               STACK               := $0100             ; $0100-$01FF
+000000r 2               
+000000r 2               ; Input Buffer
+000000r 2               INPUT_BUFFER        := $0200             ; $0200-$02FF
+000000r 2               
+000000r 2               ; Kernal Vars
+000000r 2               KERNAL_VARS         := $0300             ; $0300-$03FF
+000000r 2               IRQ_PTR             := $0300             ; $0300-$0301
+000000r 2               BRK_PTR             := $0302             ; $0302-$0303
+000000r 2               NMI_PTR             := $0304             ; $0304-$0305
+000000r 2               IO_MODE             := $0306             ; Bit 0: 0=video, 1=serial output
+000000r 2               VID_CURSOR_X        := $0307             ; Video cursor column (0-39)
+000000r 2               VID_CURSOR_Y        := $0308             ; Video cursor row (0-23)
+000000r 2               VID_CURSOR_ADDR     := $0309             ; Video cursor VRAM address ($0309-$030A)
+000000r 2               RTC_BUF_CENT        := $030B             ; Century value from last RtcReadDate / for RtcWriteDate
+000000r 2               RTC_TMP             := $030C             ; Scratch byte for BCD conversion
+000000r 2               HW_PRESENT          := $030D             ; Hardware present bitmask (set during Reset probe)
+000000r 2               ; HW_PRESENT bit definitions (bit order matches IO slot numbers)
+000000r 2               HW_RAM_L            = %00000001          ; Bit 0: RAM card low  (IO 1, $8000-$83FF)
+000000r 2               HW_RAM_H            = %00000010          ; Bit 1: RAM card high (IO 2, $8400-$87FF)
+000000r 2               HW_RTC              = %00000100          ; Bit 2: RTC card (IO 3, DS1511Y)
+000000r 2               HW_CF               = %00001000          ; Bit 3: Storage card (IO 4, CompactFlash)
+000000r 2               HW_SC               = %00010000          ; Bit 4: Serial card (IO 5, R65C51)
+000000r 2               HW_GPIO             = %00100000          ; Bit 5: GPIO card (IO 6, 65C22 VIA — keyboard/joysticks)
+000000r 2               HW_SID              = %01000000          ; Bit 6: Sound card (IO 7, SID/ARMSID)
+000000r 2               HW_VID              = %10000000          ; Bit 7: Video card (IO 8, TMS9918/pico9918)
+000000r 2                                                        ; $030E-$030F Reserved
+000000r 2               BRK_P               := $0310             ; Saved P at time of BRK
+000000r 2               BRK_PCL             := $0311             ; Saved PCL at time of BRK (points to BRK+2)
+000000r 2               BRK_PCH             := $0312             ; Saved PCH at time of BRK
+000000r 2               BRK_A               := $0313             ; Saved A at time of BRK
+000000r 2               BRK_X               := $0314             ; Saved X at time of BRK
+000000r 2               BRK_Y               := $0315             ; Saved Y at time of BRK
+000000r 2               BRK_SP              := $0316             ; Saved SP at time of BRK
+000000r 2               XFER_REMAIN         := $0317             ; $0317-$0318 - Remaining bytes to transfer (2 bytes)
+000000r 2               XFER_IO_SAVE        := $0319             ; Saved IO_MODE before switching to serial
+000000r 2                                                        ; $031A-$031F Reserved
+000000r 2               SCROLL_BUF          := $0320             ; $0320-$0347 - 40-byte scroll temp buffer
+000000r 2               ; Filesystem temp vars ($0348+)
+000000r 2               FS_START_SEC        := $0348             ; $0348-$0349 - File start sector (2 bytes)
+000000r 2               FS_FILE_SIZE        := $034A             ; $034A-$034B - File size in bytes (2 bytes)
+000000r 2               FS_SEC_COUNT        := $034C             ; Number of sectors to read/write
+000000r 2               FS_DIR_IDX          := $034D             ; Directory entry index (0-15)
+000000r 2               FS_NEXT_SEC         := $034E             ; $034E-$034F - Next free sector for allocation (2 bytes)
+000000r 2               FS_FNAME_BUF        := $0350             ; $0350-$035A - 11-byte filename buffer (8 name + 3 ext)
+000000r 2               FS_SECTOR_BUF       := $0600             ; $0600-$07FF - 512-byte sector buffer (overlaps BAS_TOKBUF/BAS_STRBUF)
+000000r 2               
+000000r 2               ; User Vars
+000000r 2               USER_VARS           := $0400             ; $0400-$07FF
+000000r 2               
+000000r 2               ; Program
+000000r 2               PROGRAM_START       := $0800             ; $0800-$7FFF
+000000r 2               
+000000r 2               ; RAM Card | IO 1 | $8000-$83FF
+000000r 2               RAM_DATA_L          := $8000             ; R/W ($8000-$83FE)
+000000r 2               RAM_BANK_L          := $83FF             ; Write-only RAM bank latch, value ($00-$FF) sets which of 256 ~1K banks of RAM is selected
+000000r 2               
+000000r 2               ; RAM Card | IO 2 | $8400-$87FF
+000000r 2               RAM_DATA_H          := $8400             ; R/W ($8400-$87FE)
+000000r 2               RAM_BANK_H          := $87FF             ; Write-only RAM bank latch, value ($00-$FF) sets which of 256 ~1K banks of RAM is selected
+000000r 2               
+000000r 2               ; RTC Card (DS1511Y) | IO 3 | $8800-$881F
+000000r 2               RTC_SEC             := $8800
+000000r 2               RTC_MIN             := $8801
+000000r 2               RTC_HR              := $8802
+000000r 2               RTC_DAY             := $8803
+000000r 2               RTC_DATE            := $8804
+000000r 2               RTC_MON             := $8805
+000000r 2               RTC_YR              := $8806
+000000r 2               RTC_CENT            := $8807
+000000r 2               RTC_ALARM_SEC       := $8808
+000000r 2               RTC_ALARM_MIN       := $8809
+000000r 2               RTC_ALARM_HR        := $880A
+000000r 2               RTC_ALARM_DATE      := $880B
+000000r 2               RTC_WD_L            := $880C
+000000r 2               RTC_WD_H            := $880D
+000000r 2               RTC_CTRL_A          := $880E
+000000r 2               RTC_CTRL_B          := $880F
+000000r 2               RTC_RAM_ADDR        := $8810
+000000r 2               RTC_RAM_DATA        := $8813
+000000r 2               ; DS1511Y Control Register B Bits
+000000r 2               RTC_CTRL_B_TE       := %10000000         ; Transfer Enable — set to inhibit updates during write
+000000r 2               
+000000r 2               ; Storage Card (CompactFlash 8-bit IDE) | IO 4 | $8C00-$8C07
+000000r 2               ST_DATA             := $8C00             ; R/W
+000000r 2               ST_ERROR            := $8C01             ; Read
+000000r 2               ST_FEATURE          := $8C01             ; Write
+000000r 2               ST_SECT_CNT         := $8C02             ; R/W
+000000r 2               ST_LBA_0            := $8C03             ; R/W
+000000r 2               ST_LBA_1            := $8C04             ; R/W
+000000r 2               ST_LBA_2            := $8C05             ; R/W
+000000r 2               ST_LBA_3            := $8C06             ; R/W
+000000r 2               ST_STATUS           := $8C07             ; Read
+000000r 2               ST_CMD              := $8C07             ; Write
+000000r 2               ST_ERR_AMNF         := %00000001
+000000r 2               ST_ERR_ABRT         := %00000100
+000000r 2               ST_ERR_IDNF         := %00010000
+000000r 2               ST_ERR_UNC          := %01000000
+000000r 2               ST_ERR_BBK          := %10000000
+000000r 2               ST_STATUS_ERR       := %00000001
+000000r 2               ST_STATUS_IDX       := %00000010
+000000r 2               ST_STATUS_CORR      := %00000100
+000000r 2               ST_STATUS_DRQ       := %00001000
+000000r 2               ST_STATUS_DSC       := %00010000
+000000r 2               ST_STATUS_DWF       := %00100000
+000000r 2               ST_STATUS_RDY       := %01000000
+000000r 2               ST_STATUS_BSY       := %10000000
+000000r 2               ; ATA Command Constants
+000000r 2               ST_CMD_READ         := $20               ; Read Sectors
+000000r 2               ST_CMD_WRITE        := $30               ; Write Sectors
+000000r 2               ST_CMD_SET_FEAT     := $EF               ; Set Features
+000000r 2               ST_FEAT_8BIT        := $01               ; Enable 8-bit data I/O
+000000r 2               ST_LBA3_MASTER      := $E0               ; LBA mode, master drive (bits 7-5 = 111, bit 4 = 0)
+000000r 2               ; Filesystem Constants
+000000r 2               FS_DIR_LBA          = 0                  ; Directory sector at LBA 0
+000000r 2               FS_DATA_START       = 1                  ; Data sectors start at LBA 1
+000000r 2               FS_MAX_FILES        = 16                 ; Max directory entries
+000000r 2               FS_ENTRY_SIZE       = 32                 ; Bytes per directory entry
+000000r 2               FS_ENTRY_FLAGS      = 11                 ; Offset of flags byte within entry
+000000r 2               FS_ENTRY_START      = 12                 ; Offset of start sector (2 bytes)
+000000r 2               FS_ENTRY_FSIZE      = 14                 ; Offset of file size (2 bytes)
+000000r 2               FS_FLAG_USED        = %00000001          ; Entry in use
+000000r 2               
+000000r 2               ; Serial Card / Serial Card Pro (R65C51) | IO 5 | $9000-$9003
+000000r 2               SC_DATA             := $9000             ; R/W
+000000r 2               SC_RESET            := $9001             ; Write
+000000r 2               SC_STATUS           := $9001             ; Read
+000000r 2               SC_CMD              := $9002             ; R/W
+000000r 2               SC_CTRL             := $9003             ; R/W
+000000r 2               SC_STATUS_IRQ       := %10000000         ; Interrupt
+000000r 2               SC_STATUS_DSR       := %01000000         ; Data Set Ready
+000000r 2               SC_STATUS_DCD       := %00100000         ; Data Carrier Detect
+000000r 2               SC_STATUS_TDRE      := %00010000         ; TX Data Register Empty
+000000r 2               SC_STATUS_RDRF      := %00001000         ; RX Data Register Full
+000000r 2               SC_STATUS_OVR       := %00000100         ; Overrun
+000000r 2               SC_STATUS_FRME      := %00000010         ; Framing Error
+000000r 2               SC_STATUS_PARE      := %00000001         ; Parity Error
+000000r 2               
+000000r 2               ; GPIO Card / Input Board (65C22) | IO 6 | $9400-$940F
+000000r 2               GPIO_PORTB          := $9400
+000000r 2               GPIO_PORTA          := $9401
+000000r 2               GPIO_DDRB           := $9402
+000000r 2               GPIO_DDRA           := $9403
+000000r 2               GPIO_T1CL           := $9404
+000000r 2               GPIO_T1CH           := $9405
+000000r 2               GPIO_T1LL           := $9406
+000000r 2               GPIO_T1LH           := $9407
+000000r 2               GPIO_T2CL           := $9408
+000000r 2               GPIO_T2CH           := $9409
+000000r 2               GPIO_SR             := $940A
+000000r 2               GPIO_ACR            := $940B
+000000r 2               GPIO_PCR            := $940C
+000000r 2               GPIO_IFR            := $940D
+000000r 2               GPIO_IER            := $940E
+000000r 2               GPIO_ORA            := $940F
+000000r 2               ; Keyboard (VIA) Constants
+000000r 2               GPIO_PCR_CB2_LO     := %11000000         ; PCR CB2 mode = manual output low (enables matrix keyboard encoder)
+000000r 2               GPIO_PCR_CB2_HI     := %11100000         ; PCR CB2 mode = manual output high (disables matrix keyboard encoder)
+000000r 2               GPIO_PCR_CB1_NEG    := %00000000         ; PCR CB1 active on falling (high-to-low) edge
+000000r 2               GPIO_PCR_CA2_LO     := %00001100         ; PCR CA2 mode = manual output low (enables PS/2 keyboard encoder)
+000000r 2               GPIO_PCR_CA2_HI     := %00001110         ; PCR CA2 mode = manual output high (disables PS/2 keyboard encoder)
+000000r 2               GPIO_PCR_CA1_NEG    := %00000000         ; PCR CA1 active on falling (high-to-low) edge
+000000r 2               GPIO_INT_CB1        := %00010000         ; IFR/IER bit 4 = CB1 interrupt flag/enable
+000000r 2               GPIO_INT_CA1        := %00000010         ; IFR/IER bit 1 = CA1 interrupt flag/enable
+000000r 2               GPIO_IER_SET        := %10000000         ; IER bit 7 = set mode (1=set named bits, 0=clear)
+000000r 2               
+000000r 2               ; Sound Card (SID/ARMSID) | IO 7 | $9800-$981C
+000000r 2               SID_V1_FREQ_LO      := $9800             ; Voice 1 Frequency Low
+000000r 2               SID_V1_FREQ_HI      := $9801             ; Voice 1 Frequency High
+000000r 2               SID_V1_PW_LO        := $9802             ; Voice 1 Pulse Width Low
+000000r 2               SID_V1_PW_HI        := $9803             ; Voice 1 Pulse Width High
+000000r 2               SID_V1_CTRL         := $9804             ; Voice 1 Control Register
+000000r 2               SID_V1_AD           := $9805             ; Voice 1 Attack/Decay
+000000r 2               SID_V1_SR           := $9806             ; Voice 1 Sustain/Release
+000000r 2               SID_V2_FREQ_LO      := $9807             ; Voice 2 Frequency Low
+000000r 2               SID_V2_FREQ_HI      := $9808             ; Voice 2 Frequency High
+000000r 2               SID_V2_PW_LO        := $9809             ; Voice 2 Pulse Width Low
+000000r 2               SID_V2_PW_HI        := $980A             ; Voice 2 Pulse Width High
+000000r 2               SID_V2_CTRL         := $980B             ; Voice 2 Control Register
+000000r 2               SID_V2_AD           := $980C             ; Voice 2 Attack/Decay
+000000r 2               SID_V2_SR           := $980D             ; Voice 2 Sustain/Release
+000000r 2               SID_V3_FREQ_LO      := $980E             ; Voice 3 Frequency Low
+000000r 2               SID_V3_FREQ_HI      := $980F             ; Voice 3 Frequency High
+000000r 2               SID_V3_PW_LO        := $9810             ; Voice 3 Pulse Width Low
+000000r 2               SID_V3_PW_HI        := $9811             ; Voice 3 Pulse Width High
+000000r 2               SID_V3_CTRL         := $9812             ; Voice 3 Control Register
+000000r 2               SID_V3_AD           := $9813             ; Voice 3 Attack/Decay
+000000r 2               SID_V3_SR           := $9814             ; Voice 3 Sustain/Release
+000000r 2               SID_FC_LO           := $9815             ; Filter Cutoff Low
+000000r 2               SID_FC_HI           := $9816             ; Filter Cutoff High
+000000r 2               SID_RES_FILT        := $9817             ; Resonance/Filter
+000000r 2               SID_MODE_VOL        := $9818             ; Filter Mode/Volume
+000000r 2               SID_PADDLE_X        := $9819             ; Paddle X (Read-only)
+000000r 2               SID_PADDLE_Y        := $981A             ; Paddle Y (Read-only)
+000000r 2               SID_OSC3            := $981B             ; Oscillator 3 (Read-only)
+000000r 2               SID_ENV3            := $981C             ; Envelope 3 (Read-only)
+000000r 2               ; SID Control Register Bits
+000000r 2               SID_CTRL_GATE       := %00000001         ; Gate bit
+000000r 2               SID_CTRL_SYNC       := %00000010         ; Sync bit
+000000r 2               SID_CTRL_RING       := %00000100         ; Ring modulation
+000000r 2               SID_CTRL_TEST       := %00001000         ; Test bit
+000000r 2               SID_CTRL_TRIANGLE   := %00010000         ; Triangle waveform
+000000r 2               SID_CTRL_SAWTOOTH   := %00100000         ; Sawtooth waveform
+000000r 2               SID_CTRL_PULSE      := %01000000         ; Pulse waveform
+000000r 2               SID_CTRL_NOISE      := %10000000         ; Noise waveform
+000000r 2               ; SID Filter Mode Bits
+000000r 2               SID_FILT_LP         := %00010000         ; Low-pass filter
+000000r 2               SID_FILT_BP         := %00100000         ; Band-pass filter
+000000r 2               SID_FILT_HP         := %01000000         ; High-pass filter
+000000r 2               SID_FILT_3OFF       := %10000000         ; Voice 3 off
+000000r 2               
+000000r 2               ; Video Card / VGA Card (TMS9918/pico9918) | IO 8 | $9C00-$9C01
+000000r 2               VC_DATA             := $9C00             ; R/W
+000000r 2               VC_REG              := $9C01             ; Write
+000000r 2               VC_STATUS           := $9C01             ; Read
+000000r 2               
+000000r 1               
+000000r 1               .segment "CODE"
+000000r 1               
+000000r 1               Start:
+000000r 1  60             rts
+000001r 1                 ; Your code goes here!
+000001r 1               
