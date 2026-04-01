@@ -246,7 +246,11 @@ Current file: Program.asm
 000000r 1               
 000000r 1               .segment "CODE"
 000000r 1               
-000000r 1               Start:
-000000r 1  60             rts
-000001r 1                 ; Your code goes here!
-000001r 1               
+000000r 1  0A 08 0A 00  BasicStartup: .byte $0A, $08, $0A, $00, $9E, $32, $30, $36, $30, $00, $00, $00    ; BASIC = 10 SYS 2060
+000004r 1  9E 32 30 36  
+000008r 1  30 00 00 00  
+00000Cr 1               
+00000Cr 1               Start:
+00000Cr 1                 ; Your code goes here!
+00000Cr 1  60             rts
+00000Cr 1               

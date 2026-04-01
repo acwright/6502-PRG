@@ -3,6 +3,26 @@
 
 A 6502 assembly language program template for [A.C. Wright 6502 project](https://github.com/acwright/6502).
 
+## BASIC Startup
+
+This section contains a tokenized BASIC program that serves as a loader for the machine code. This should be included at the start of program files. When executed by the BASIC interpreter, it decodes to the program `10 SYS 2060`, which uses the SYS command to jump directly to the machine code entry point at address $080C (decimal 2060). This allows the 6502 assembly program to run directly from BASIC without manual memory address entry.
+
+| Address | Byte | Meaning |
+|---------|------|---------|
+| `$0800` | `$0A` | Next-line ptr lo → `$080A` |
+| `$0801` | `$08` | Next-line ptr hi |
+| `$0802` | `$0A` | Line number 10 (lo) |
+| `$0803` | `$00` | Line number 10 (hi) |
+| `$0804` | `$9E` | `TOK_SYS` |
+| `$0805` | `$32` | `'2'` |
+| `$0806` | `$30` | `'0'` |
+| `$0807` | `$36` | `'6'` |
+| `$0808` | `$30` | `'0'` |
+| `$0809` | `$00` | Line terminator |
+| `$080A` | `$00` | End-of-program sentinel (lo) |
+| `$080B` | `$00` | End-of-program sentinel (hi) |
+| `$080C` | … | **Machine code entry point** (`2060` decimal = `$080C`) |
+
 ## Building Program
 
 To build the program, navigate to its directory and use `make`.
