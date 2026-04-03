@@ -16,7 +16,7 @@ woz:
 	bin2woz -a 0x0800 $(TARGET).prg > $(TARGET).woz
 
 cf:
-	cffs create -s 128M $(TARGET).img
+	cffs create $(TARGET).img
 	cp $(TARGET).prg $(EIGHTTHREE).PRG
 	cffs add $(TARGET).img $(EIGHTTHREE).PRG
 	rm HELLOWLD.PRG
