@@ -65,6 +65,17 @@ Or build from source:
 
 For more information, see the [bin2woz project](https://github.com/acwright/bin2woz).
 
+#### cffs
+
+Install from NPM:
+```bash
+npm install -g cffs-image-tool
+```
+
+The `cffs` tool is used to create CompactFlash disk images and add files to them. It's required for the `make cf` target.
+
+For more information, see the [cffs project](https://github.com/acwright/cffs).
+
 ### Available Targets
 
 - `make` or `make all` - Build the program
