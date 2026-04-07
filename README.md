@@ -59,13 +59,13 @@ The system is already fully initialized when your program runs. Key entry points
 | `$A000` | `Chrout` | Output character (routed by IO_MODE) |
 | `$A003` | `Chrin` | Read character from input buffer (blocking) |
 | `$A00C` | `BufferSize` | Number of unread bytes in input buffer |
-| `$A01E` | `VideoClear` | Clear screen and reset cursor |
-| `$A021` | `VideoPutChar` | Write character at cursor position |
-| `$A024` | `VideoSetCursor` | Set cursor position (X=col, Y=row) |
-| `$A06C` | `VideoSetColor` | Set text color (A = fg<<4 \| bg) |
-| `$A05D` | `SidPlayNote` | Play note (A=voice, X=freqLo, Y=freqHi) |
-| `$A066` | `SysDelay` | Delay A=lo, X=hi centiseconds |
-| `$A030` | `ReadJoystick1` | Read joystick 1 bitmask |
+| `$A018` | `VideoClear` | Clear screen and reset cursor |
+| `$A01B` | `VideoPutChar` | Write character at cursor position |
+| `$A01E` | `VideoSetCursor` | Set cursor position (X=col, Y=row) |
+| `$A027` | `VideoSetColor` | Set text color (A = fg<<4 \| bg) |
+| `$A033` | `SidPlayNote` | Play note (A=voice, X=freqLo, Y=freqHi) |
+| `$A075` | `SysDelay` | Delay A=lo, X=hi centiseconds |
+| `$A048` | `ReadJoystick1` | Read joystick 1 bitmask |
 
 See `6502.inc` for the complete jump table with calling conventions.
 

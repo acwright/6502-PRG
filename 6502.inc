@@ -178,122 +178,61 @@ BufferSize          := $A00C             ; Get number of unread bytes in input b
                                          ;   Out: A = count
                                          ;   Modifies: A
 
-SerialChrout        := $A02D             ; Direct serial output (bypasses IO_MODE)
-                                         ;   In: A = character
-                                         ;   Blocks until TX register is empty
+; --- IO Mode ---
+SetIOMode           := $A00F             ; Set IO_MODE
+                                         ;   In: A = mode (bit 0: 0=video, 1=serial)
 
-VideoChroutRaw      := $A06F             ; Output char to video with no control-code handling
+GetIOMode           := $A012             ; Get IO_MODE
+                                         ;   Out: A = current IO_MODE
+
+; --- Video (TMS9918 / pico9918) ---
+InitVideo           := $A015             ; Initialize TMS9918 (text mode, 40×24)
+                                         ;   Modifies: A, X
+
+VideoClear          := $A018             ; Clear screen (fill with spaces), reset cursor to (0,0)
+                                         ;   Modifies: A, X, Y
+
+VideoPutChar        := $A01B             ; Write character at cursor position (no cursor advance)
+                                         ;   In: A = character
+
+VideoSetCursor      := $A01E             ; Set cursor position
+                                         ;   In: X = column (0-39), Y = row (0-23)
+                                         ;   Modifies: A
+
+VideoGetCursor      := $A021             ; Get cursor position
+                                         ;   Out: X = column (0-39), Y = row (0-23)
+
+VideoScroll         := $A024             ; Scroll screen up one line, clear bottom row
+                                         ;   Modifies: A, X, Y
+
+VideoSetColor       := $A027             ; Set TMS9918 text color
+                                         ;   In: A = color byte (high nibble = foreground, low nibble = background)
+                                         ;   See TMS9918 Color Constants below
+
+VideoChroutRaw      := $A02A             ; Output char to video with no control-code handling
                                          ;   In: A = character code (0-255)
                                          ;   Preserves: A, X, Y
                                          ;   Always renders glyph, never interprets CR/LF/BS/BEL
 
-; --- IO Mode ---
-SetIOMode           := $A051             ; Set IO_MODE
-                                         ;   In: A = mode (bit 0: 0=video, 1=serial)
-
-GetIOMode           := $A054             ; Get IO_MODE
-                                         ;   Out: A = current IO_MODE
-
-; --- Video (TMS9918 / pico9918) ---
-InitVideo           := $A00F             ; Initialize TMS9918 (text mode, 40×24)
-                                         ;   Modifies: A, X
-
-VideoClear          := $A01E             ; Clear screen (fill with spaces), reset cursor to (0,0)
-                                         ;   Modifies: A, X, Y
-
-VideoPutChar        := $A021             ; Write character at cursor position (no cursor advance)
-                                         ;   In: A = character
-
-VideoSetCursor      := $A024             ; Set cursor position
-                                         ;   In: X = column (0-39), Y = row (0-23)
-                                         ;   Modifies: A
-
-VideoGetCursor      := $A027             ; Get cursor position
-                                         ;   Out: X = column (0-39), Y = row (0-23)
-
-VideoScroll         := $A02A             ; Scroll screen up one line, clear bottom row
-                                         ;   Modifies: A, X, Y
-
-VideoSetColor       := $A06C             ; Set TMS9918 text color
-                                         ;   In: A = color byte (high nibble = foreground, low nibble = background)
-                                         ;   See TMS9918 Color Constants below
-
-; --- Keyboard / GPIO ---
-InitKB              := $A012             ; Initialize VIA for keyboard input
-                                         ;   Configures Port A/B as inputs, enables CB1/CA1 IRQs
-                                         ;   Modifies: A
-
-; --- Joysticks ---
-ReadJoystick1       := $A030             ; Read joystick 1 (VIA Port B)
-                                         ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
-                                         ;   Temporarily disables matrix keyboard encoder
-
-ReadJoystick2       := $A033             ; Read joystick 2 (VIA Port A)
-                                         ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
-                                         ;   Temporarily disables PS/2 keyboard encoder
-
-; --- Serial (R65C51) ---
-InitSC              := $A015             ; Initialize serial card (8-N-1, 19200 baud)
-                                         ;   Modifies: A
-
 ; --- Sound (SID / ARMSID) ---
-InitSID             := $A018             ; Initialize SID (clear all registers, volume=15)
+InitSID             := $A02D             ; Initialize SID (clear all registers, volume=15)
                                          ;   Modifies: A, X
 
-Beep                := $A01B             ; Play short beep tone (~475 Hz)
+Beep                := $A030             ; Play short beep tone (~475 Hz)
                                          ;   Skips silently if no SID detected
                                          ;   Modifies: A, X, Y
 
-SidPlayNote         := $A05D             ; Play note on a SID voice
+SidPlayNote         := $A033             ; Play note on a SID voice
                                          ;   In: A = voice (0-2), X = freq low, Y = freq high
                                          ;   Uses triangle waveform, ADSR: A=0 D=9 S=A R=2
                                          ;   Modifies: A
 
-SidSilence          := $A060             ; Silence all 3 SID voices (gate off, zero freq)
+SidSilence          := $A036             ; Silence all 3 SID voices (gate off, zero freq)
                                          ;   Modifies: A
 
-SidSetVolume        := $A069             ; Set SID master volume
+SidSetVolume        := $A039             ; Set SID master volume
                                          ;   In: A = volume (0-15)
                                          ;   Modifies: A
-
-; --- RTC (DS1511Y) ---
-RtcReadTime         := $A036             ; Read current time
-                                         ;   Out: A = hours, X = minutes, Y = seconds (all binary)
-
-RtcReadDate         := $A039             ; Read current date
-                                         ;   Out: A = day, X = month, Y = year (all binary)
-                                         ;   RTC_BUF_CENT ($030B) = century
-
-RtcWriteTime        := $A03C             ; Set RTC time
-                                         ;   In: A = hours, X = minutes, Y = seconds (all binary)
-                                         ;   Modifies: A, X
-
-RtcWriteDate        := $A03F             ; Set RTC date
-                                         ;   In: A = day, X = month, Y = year (all binary)
-                                         ;   RTC_BUF_CENT ($030B) must hold century
-                                         ;   Modifies: A, X
-
-RtcReadNVRAM        := $A042             ; Read byte from DS1511Y NVRAM (256 bytes)
-                                         ;   In: X = address ($00-$FF)
-                                         ;   Out: A = data byte
-
-RtcWriteNVRAM       := $A045             ; Write byte to DS1511Y NVRAM
-                                         ;   In: X = address ($00-$FF), A = data byte
-
-; --- CompactFlash Storage ---
-StReadSector        := $A048             ; Read one 512-byte sector
-                                         ;   In: CF_LBA ($26-$29) = LBA, CF_BUF_PTR ($24-$25) = dest
-                                         ;   Out: C=0 success, C=1 error; CF_BUF_PTR advanced by 512
-                                         ;   Modifies: A, X, Y
-
-StWriteSector       := $A04B             ; Write one 512-byte sector
-                                         ;   In: CF_LBA ($26-$29) = LBA, CF_BUF_PTR ($24-$25) = source
-                                         ;   Out: C=0 success, C=1 error; CF_BUF_PTR advanced by 512
-                                         ;   Modifies: A, X, Y
-
-StWaitReady         := $A04E             ; Wait for CF to become ready (BSY=0, RDY=1)
-                                         ;   Out: C=0 ready, C=1 timeout/error
-                                         ;   Modifies: A, X, Y
 
 ; --- Filesystem (simple 16-file directory on CF) ---
 ;   Directory lives at LBA 0 (512 bytes, 16 × 32-byte entries).
@@ -301,36 +240,104 @@ StWaitReady         := $A04E             ; Wait for CF to become ready (BSY=0, R
 ;   Filenames are 8.3 format, space-padded, case-insensitive.
 ;   Pass null-terminated "NAME.EXT" string via STR_PTR ($02-$03).
 
-FsDeleteFile        := $A063             ; Delete file from CF
+FsLoadFile          := $A03C             ; Load file from CF
                                          ;   In: STR_PTR = pointer to null-terminated filename
                                          ;   Out: C=0 success, C=1 not found or error
                                          ;   Modifies: A, X, Y
 
-; FsLoadFile and FsSaveFile are internal Kernal routines (not in jump table).
-; External programs should use AsciiLoad/AsciiSave or raw sector I/O.
+FsSaveFile          := $A03F             ; Save file to CF
+                                         ;   In: STR_PTR = pointer to null-terminated filename
+                                         ;   Out: C=0 success, C=1 error
+                                         ;   Modifies: A, X, Y
+
+FsDeleteFile        := $A042             ; Delete file from CF
+                                         ;   In: STR_PTR = pointer to null-terminated filename
+                                         ;   Out: C=0 success, C=1 not found or error
+                                         ;   Modifies: A, X, Y
+
+; --- Keyboard / GPIO ---
+InitKB              := $A045             ; Initialize VIA for keyboard input
+                                         ;   Configures Port A/B as inputs, enables CB1/CA1 IRQs
+                                         ;   Modifies: A
+
+; --- Joysticks ---
+ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
+                                         ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
+                                         ;   Temporarily disables matrix keyboard encoder
+
+ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
+                                         ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
+                                         ;   Temporarily disables PS/2 keyboard encoder
+
+; --- Serial (R65C51) ---
+InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
+                                         ;   Modifies: A
+
+SerialChrout        := $A051             ; Direct serial output (bypasses IO_MODE)
+                                         ;   In: A = character
+                                         ;   Blocks until TX register is empty
 
 ; --- Serial Transfer ---
-AsciiLoad           := $A057             ; Receive raw binary via serial into PROGRAM_START
+AsciiLoad           := $A054             ; Receive raw binary via serial into PROGRAM_START
                                          ;   Protocol: 2-byte size (lo/hi), then raw data bytes
                                          ;   Temporarily switches IO_MODE to serial
                                          ;   Out: C=0 success
                                          ;   Modifies: A, X, Y
 
-AsciiSave           := $A05A             ; Send program memory as raw binary via serial
+AsciiSave           := $A057             ; Send program memory as raw binary via serial
                                          ;   Protocol: 2-byte size (lo/hi), then raw data bytes
                                          ;   Sends from PROGRAM_START to BAS_PRGEND
                                          ;   Temporarily switches IO_MODE to serial
                                          ;   Out: C=0 success
                                          ;   Modifies: A, X, Y
 
+; --- RTC (DS1511Y) ---
+RtcReadTime         := $A05A             ; Read current time
+                                         ;   Out: A = hours, X = minutes, Y = seconds (all binary)
+
+RtcReadDate         := $A05D             ; Read current date
+                                         ;   Out: A = day, X = month, Y = year (all binary)
+                                         ;   RTC_BUF_CENT ($030B) = century
+
+RtcWriteTime        := $A060             ; Set RTC time
+                                         ;   In: A = hours, X = minutes, Y = seconds (all binary)
+                                         ;   Modifies: A, X
+
+RtcWriteDate        := $A063             ; Set RTC date
+                                         ;   In: A = day, X = month, Y = year (all binary)
+                                         ;   RTC_BUF_CENT ($030B) must hold century
+                                         ;   Modifies: A, X
+
+RtcReadNVRAM        := $A066             ; Read byte from DS1511Y NVRAM (256 bytes)
+                                         ;   In: X = address ($00-$FF)
+                                         ;   Out: A = data byte
+
+RtcWriteNVRAM       := $A069             ; Write byte to DS1511Y NVRAM
+                                         ;   In: X = address ($00-$FF), A = data byte
+
+; --- CompactFlash Storage ---
+StReadSector        := $A06C             ; Read one 512-byte sector
+                                         ;   In: CF_LBA ($26-$29) = LBA, CF_BUF_PTR ($24-$25) = dest
+                                         ;   Out: C=0 success, C=1 error; CF_BUF_PTR advanced by 512
+                                         ;   Modifies: A, X, Y
+
+StWriteSector       := $A06F             ; Write one 512-byte sector
+                                         ;   In: CF_LBA ($26-$29) = LBA, CF_BUF_PTR ($24-$25) = source
+                                         ;   Out: C=0 success, C=1 error; CF_BUF_PTR advanced by 512
+                                         ;   Modifies: A, X, Y
+
+StWaitReady         := $A072             ; Wait for CF to become ready (BSY=0, RDY=1)
+                                         ;   Out: C=0 ready, C=1 timeout/error
+                                         ;   Modifies: A, X, Y
+
 ; --- Timing ---
-SysDelay            := $A066             ; Delay for specified centiseconds (10 ms units)
+SysDelay            := $A075             ; Delay for specified centiseconds (10 ms units)
                                          ;   In: A = low byte, X = high byte (16-bit count)
                                          ;   Uses VIA T1 if available, else software loop
                                          ;   Modifies: A
 
-; --- System / Cartridge Support ---
-KernalInit          := $A072             ; Initialize all hardware (vectors, probe & init all I/O)
+; --- System ---
+KernalInit          := $A078             ; Initialize all hardware (vectors, probe & init all I/O)
                                          ;   Caller MUST reset the stack pointer before JSR:
                                          ;     ldx #$ff / txs / jsr KernalInit
                                          ;   Zeroes BOOT_VECTOR, sets HW_PRESENT, IO_MODE, IRQ/BRK/NMI ptrs
@@ -340,7 +347,7 @@ KernalInit          := $A072             ; Initialize all hardware (vectors, pro
                                          ;   Does NOT halt if no console is detected
                                          ;   Modifies: All registers, flags
 
-KernalVersion       := $A075             ; Get BIOS version
+KernalVersion       := $A07B             ; Get BIOS version
                                          ;   Out: A = major version, X = minor version
 
 
