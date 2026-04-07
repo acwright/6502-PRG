@@ -38,7 +38,9 @@ Start:
   sta STR_PTR + 1
   jsr PrintStr                  ; Print the message
 
-  jsr Chrin                     ; Wait for a keypress
+@WaitKey:
+  jsr Chrin                     ; Poll for a keypress (non-blocking)
+  bcc @WaitKey                  ; Loop until character available (C=1)
 
   jsr VideoClear                ; Clear screen before returning
   rts                           ; Return to BASIC

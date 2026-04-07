@@ -160,8 +160,9 @@ Chrout              := $A000             ; Output character (dispatched by IO_MO
                                          ;   Preserves: A, X, Y
                                          ;   Handles CR ($0D), LF ($0A), BS ($08), BEL ($07) in video mode
 
-Chrin               := $A003             ; Input character from buffer (blocking-poll)
+Chrin               := $A003             ; Input character from buffer (non-blocking poll)
                                          ;   Out: A = character, C=1 if char available, C=0 if not
+                                         ;   Caller must loop until C=1 for blocking behavior
                                          ;   Echoes character via Chrout
                                          ;   Modifies: A
 

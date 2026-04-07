@@ -167,8 +167,9 @@ Current file: Program.asm
 000000r 2                                                        ;   Preserves: A, X, Y
 000000r 2                                                        ;   Handles CR ($0D), LF ($0A), BS ($08), BEL ($07) in video mode
 000000r 2               
-000000r 2               Chrin               := $A003             ; Input character from buffer (blocking-poll)
+000000r 2               Chrin               := $A003             ; Input character from buffer (non-blocking poll)
 000000r 2                                                        ;   Out: A = character, C=1 if char available, C=0 if not
+000000r 2                                                        ;   Caller must loop until C=1 for blocking behavior
 000000r 2                                                        ;   Echoes character via Chrout
 000000r 2                                                        ;   Modifies: A
 000000r 2               
@@ -760,35 +761,37 @@ Current file: Program.asm
 000015r 1  85 03          sta STR_PTR + 1
 000017r 1  20 rr rr       jsr PrintStr                  ; Print the message
 00001Ar 1               
-00001Ar 1  20 03 A0       jsr Chrin                     ; Wait for a keypress
-00001Dr 1               
-00001Dr 1  20 1E A0       jsr VideoClear                ; Clear screen before returning
-000020r 1  60             rts                           ; Return to BASIC
-000021r 1               
-000021r 1               ; =============================================================================
-000021r 1               ;   PrintStr — Print a null-terminated string via Chrout
-000021r 1               ;   In: STR_PTR ($02-$03) = pointer to string
-000021r 1               ; =============================================================================
-000021r 1               PrintStr:
-000021r 1  A0 00          ldy #$00
-000023r 1               @PrintLoop:
-000023r 1  B1 02          lda (STR_PTR),y
-000025r 1  F0 06          beq @PrintDone                ; Null terminator — done
-000027r 1  20 00 A0       jsr Chrout
-00002Ar 1  C8             iny
-00002Br 1  D0 F6          bne @PrintLoop                ; Max 256 chars per call
-00002Dr 1               @PrintDone:
-00002Dr 1  60             rts
-00002Er 1               
-00002Er 1               ; =============================================================================
-00002Er 1               ;   Data
-00002Er 1               ; =============================================================================
-00002Er 1               
-00002Er 1               HelloMsg:
-00002Er 1  48 65 6C 6C    .byte "Hello from Program!", CHAR_CR, CHAR_LF
-000032r 1  6F 20 66 72  
-000036r 1  6F 6D 20 50  
-000043r 1  50 72 65 73    .byte "Press any key to return to BASIC.", CHAR_CR, CHAR_LF, $00
-000047r 1  73 20 61 6E  
-00004Br 1  79 20 6B 65  
-000066r 1               
+00001Ar 1               @WaitKey:
+00001Ar 1  20 03 A0       jsr Chrin                     ; Poll for a keypress (non-blocking)
+00001Dr 1  90 FB          bcc @WaitKey                  ; Loop until character available (C=1)
+00001Fr 1               
+00001Fr 1  20 1E A0       jsr VideoClear                ; Clear screen before returning
+000022r 1  60             rts                           ; Return to BASIC
+000023r 1               
+000023r 1               ; =============================================================================
+000023r 1               ;   PrintStr — Print a null-terminated string via Chrout
+000023r 1               ;   In: STR_PTR ($02-$03) = pointer to string
+000023r 1               ; =============================================================================
+000023r 1               PrintStr:
+000023r 1  A0 00          ldy #$00
+000025r 1               @PrintLoop:
+000025r 1  B1 02          lda (STR_PTR),y
+000027r 1  F0 06          beq @PrintDone                ; Null terminator — done
+000029r 1  20 00 A0       jsr Chrout
+00002Cr 1  C8             iny
+00002Dr 1  D0 F6          bne @PrintLoop                ; Max 256 chars per call
+00002Fr 1               @PrintDone:
+00002Fr 1  60             rts
+000030r 1               
+000030r 1               ; =============================================================================
+000030r 1               ;   Data
+000030r 1               ; =============================================================================
+000030r 1               
+000030r 1               HelloMsg:
+000030r 1  48 65 6C 6C    .byte "Hello from Program!", CHAR_CR, CHAR_LF
+000034r 1  6F 20 66 72  
+000038r 1  6F 6D 20 50  
+000045r 1  50 72 65 73    .byte "Press any key to return to BASIC.", CHAR_CR, CHAR_LF, $00
+000049r 1  73 20 61 6E  
+00004Dr 1  79 20 6B 65  
+000068r 1               
