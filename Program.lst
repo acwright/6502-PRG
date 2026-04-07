@@ -46,9 +46,22 @@ Current file: Program.asm
 000000r 2               ;   BOOT SEQUENCE
 000000r 2               ;   -------------
 000000r 2               ;   On RESET the BIOS probes all eight IO slots, initializes detected
-000000r 2               ;   hardware, auto-selects video or serial console, plays a startup beep,
-000000r 2               ;   and displays a boot menu.  ENTER launches BASIC; ESC enters the
-000000r 2               ;   Monitor.  A 5-second timeout auto-boots BASIC if no key is pressed.
+000000r 2               ;   hardware, and auto-selects video or serial console.  If neither is
+000000r 2               ;   found, IO_MODE is left unchanged (no halt — cartridges with their
+000000r 2               ;   own display hardware can still boot).  A startup beep plays (if SID
+000000r 2               ;   is present) for audible feedback, then BOOT_VECTOR ($035B) is
+000000r 2               ;   checked — if non-zero, execution jumps there (cartridge takeover).
+000000r 2               ;   Otherwise a console check halts if no video/serial is found, then
+000000r 2               ;   the splash screen and boot menu are displayed.  ENTER launches
+000000r 2               ;   BASIC; ESC enters the Monitor.  A 5-second timeout auto-boots BASIC.
+000000r 2               ;
+000000r 2               ;   CARTRIDGE SUPPORT
+000000r 2               ;   -----------------
+000000r 2               ;   Cartridges overlay $C000-$FFFF (Monitor, BASIC, Wozmon, vectors).
+000000r 2               ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) remain
+000000r 2               ;   accessible.  Use KernalInit ($A072) to initialize all hardware and
+000000r 2               ;   return via RTS — interrupts are left disabled so the cart can set
+000000r 2               ;   up its own handlers first.  See usage patterns in the BIOS README.
 000000r 2               ;
 000000r 2               ;   IO_MODE
 000000r 2               ;   -------
@@ -126,6 +139,11 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; RTC scratch (used by RtcWriteDate to pass century):
 000000r 2               RTC_BUF_CENT        := $030B             ; Century value for RtcReadDate / RtcWriteDate
+000000r 2               
+000000r 2               ; Cartridge / boot redirect vector:
+000000r 2               BOOT_VECTOR         := $035B             ; 2 bytes — Boot redirect address (0=normal boot)
+000000r 2                                                        ;   Set after KernalInit to redirect Reset flow
+000000r 2                                                        ;   KernalInit zeroes this; write after init returns
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -316,6 +334,20 @@ Current file: Program.asm
 000000r 2                                                        ;   In: A = low byte, X = high byte (16-bit count)
 000000r 2                                                        ;   Uses VIA T1 if available, else software loop
 000000r 2                                                        ;   Modifies: A
+000000r 2               
+000000r 2               ; --- System / Cartridge Support ---
+000000r 2               KernalInit          := $A072             ; Initialize all hardware (vectors, probe & init all I/O)
+000000r 2                                                        ;   Caller MUST reset the stack pointer before JSR:
+000000r 2                                                        ;     ldx #$ff / txs / jsr KernalInit
+000000r 2                                                        ;   Zeroes BOOT_VECTOR, sets HW_PRESENT, IO_MODE, IRQ/BRK/NMI ptrs
+000000r 2                                                        ;   Does NOT reset the stack pointer
+000000r 2                                                        ;   Does NOT enable interrupts (caller must CLI)
+000000r 2                                                        ;   Does NOT play beep, display splash, or enter boot menu
+000000r 2                                                        ;   Does NOT halt if no console is detected
+000000r 2                                                        ;   Modifies: All registers, flags
+000000r 2               
+000000r 2               KernalVersion       := $A075             ; Get BIOS version
+000000r 2                                                        ;   Out: A = major version, X = minor version
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -645,6 +677,10 @@ Current file: Program.asm
 000000r 2               ;   SECTION 6: USEFUL CONSTANTS
 000000r 2               ; =============================================================================
 000000r 2               
+000000r 2               ; --- BIOS Version ---
+000000r 2               BIOS_VERSION_MAJOR  = 1
+000000r 2               BIOS_VERSION_MINOR  = 0
+000000r 2               
 000000r 2               ; --- ASCII Control Characters ---
 000000r 2               CHAR_BEL            = $07                ; Bell (Beep via SID)
 000000r 2               CHAR_BS             = $08                ; Backspace (cursor left + erase in video mode)
@@ -688,11 +724,71 @@ Current file: Program.asm
 000000r 1               
 000000r 1               .segment "CODE"
 000000r 1               
-000000r 1  0A 08 0A 00  BasicStartup: .byte $0A, $08, $0A, $00, $9E, $32, $30, $36, $30, $00, $00, $00    ; BASIC = 10 SYS 2060
+000000r 1               ; =============================================================================
+000000r 1               ;   BASIC Startup Stub
+000000r 1               ; =============================================================================
+000000r 1               ;   A tokenized BASIC line: 10 SYS 2060
+000000r 1               ;   When this program is loaded into $0800 and RUN in BASIC, the SYS command
+000000r 1               ;   jumps to the machine code entry point at $080C (decimal 2060).
+000000r 1               ;   This stub must remain at the very start of the program.
+000000r 1               
+000000r 1  0A 08 0A 00  BasicStartup: .byte $0A, $08, $0A, $00, $9E, $32, $30, $36, $30, $00, $00, $00
 000004r 1  9E 32 30 36  
 000008r 1  30 00 00 00  
 00000Cr 1               
-00000Cr 1               Start:
-00000Cr 1                 ; Your code goes here!
-00000Cr 1  60             rts
+00000Cr 1               ; =============================================================================
+00000Cr 1               ;   Start — Program entry point ($080C)
+00000Cr 1               ; =============================================================================
+00000Cr 1               ;   The system is already fully initialized when your program runs:
+00000Cr 1               ;     - Hardware probed and initialized (HW_PRESENT is set)
+00000Cr 1               ;     - Interrupts enabled, keyboard active
+00000Cr 1               ;     - IO_MODE set (video or serial console)
+00000Cr 1               ;     - All Kernal jump table routines available
+00000Cr 1               ;
+00000Cr 1               ;   Return to BASIC with RTS.
+00000Cr 1               ; =============================================================================
 00000Cr 1               
+00000Cr 1               Start:
+00000Cr 1                 ; === Your program starts here ===
+00000Cr 1               
+00000Cr 1                 ; Example: clear screen and print a message
+00000Cr 1  20 1E A0       jsr VideoClear                ; Clear video screen
+00000Fr 1               
+00000Fr 1  A9 rr          lda #<HelloMsg
+000011r 1  85 02          sta STR_PTR
+000013r 1  A9 rr          lda #>HelloMsg
+000015r 1  85 03          sta STR_PTR + 1
+000017r 1  20 rr rr       jsr PrintStr                  ; Print the message
+00001Ar 1               
+00001Ar 1  20 03 A0       jsr Chrin                     ; Wait for a keypress
+00001Dr 1               
+00001Dr 1  20 1E A0       jsr VideoClear                ; Clear screen before returning
+000020r 1  60             rts                           ; Return to BASIC
+000021r 1               
+000021r 1               ; =============================================================================
+000021r 1               ;   PrintStr — Print a null-terminated string via Chrout
+000021r 1               ;   In: STR_PTR ($02-$03) = pointer to string
+000021r 1               ; =============================================================================
+000021r 1               PrintStr:
+000021r 1  A0 00          ldy #$00
+000023r 1               @PrintLoop:
+000023r 1  B1 02          lda (STR_PTR),y
+000025r 1  F0 06          beq @PrintDone                ; Null terminator — done
+000027r 1  20 00 A0       jsr Chrout
+00002Ar 1  C8             iny
+00002Br 1  D0 F6          bne @PrintLoop                ; Max 256 chars per call
+00002Dr 1               @PrintDone:
+00002Dr 1  60             rts
+00002Er 1               
+00002Er 1               ; =============================================================================
+00002Er 1               ;   Data
+00002Er 1               ; =============================================================================
+00002Er 1               
+00002Er 1               HelloMsg:
+00002Er 1  48 65 6C 6C    .byte "Hello from Program!", CHAR_CR, CHAR_LF
+000032r 1  6F 20 66 72  
+000036r 1  6F 6D 20 50  
+000043r 1  50 72 65 73    .byte "Press any key to return to BASIC.", CHAR_CR, CHAR_LF, $00
+000047r 1  73 20 61 6E  
+00004Br 1  79 20 6B 65  
+000066r 1               

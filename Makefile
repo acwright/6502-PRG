@@ -17,9 +17,8 @@ woz:
 
 cf:
 	cffs create $(TARGET).img
-	cp $(TARGET).prg $(EIGHTTHREE).PRG
+	cp -f $(TARGET).prg $(EIGHTTHREE).PRG || true
 	cffs add $(TARGET).img $(EIGHTTHREE).PRG
-	rm HELLOWLD.PRG
 
 clean:
 	rm $(TARGET).prg

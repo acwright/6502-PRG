@@ -39,9 +39,22 @@
 ;   BOOT SEQUENCE
 ;   -------------
 ;   On RESET the BIOS probes all eight IO slots, initializes detected
-;   hardware, auto-selects video or serial console, plays a startup beep,
-;   and displays a boot menu.  ENTER launches BASIC; ESC enters the
-;   Monitor.  A 5-second timeout auto-boots BASIC if no key is pressed.
+;   hardware, and auto-selects video or serial console.  If neither is
+;   found, IO_MODE is left unchanged (no halt — cartridges with their
+;   own display hardware can still boot).  A startup beep plays (if SID
+;   is present) for audible feedback, then BOOT_VECTOR ($035B) is
+;   checked — if non-zero, execution jumps there (cartridge takeover).
+;   Otherwise a console check halts if no video/serial is found, then
+;   the splash screen and boot menu are displayed.  ENTER launches
+;   BASIC; ESC enters the Monitor.  A 5-second timeout auto-boots BASIC.
+;
+;   CARTRIDGE SUPPORT
+;   -----------------
+;   Cartridges overlay $C000-$FFFF (Monitor, BASIC, Wozmon, vectors).
+;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) remain
+;   accessible.  Use KernalInit ($A072) to initialize all hardware and
+;   return via RTS — interrupts are left disabled so the cart can set
+;   up its own handlers first.  See usage patterns in the BIOS README.
 ;
 ;   IO_MODE
 ;   -------
@@ -119,6 +132,11 @@ BRK_SP              := $0316             ; Saved stack pointer
 
 ; RTC scratch (used by RtcWriteDate to pass century):
 RTC_BUF_CENT        := $030B             ; Century value for RtcReadDate / RtcWriteDate
+
+; Cartridge / boot redirect vector:
+BOOT_VECTOR         := $035B             ; 2 bytes — Boot redirect address (0=normal boot)
+                                         ;   Set after KernalInit to redirect Reset flow
+                                         ;   KernalInit zeroes this; write after init returns
 
 
 ; =============================================================================
@@ -309,6 +327,20 @@ SysDelay            := $A066             ; Delay for specified centiseconds (10 
                                          ;   In: A = low byte, X = high byte (16-bit count)
                                          ;   Uses VIA T1 if available, else software loop
                                          ;   Modifies: A
+
+; --- System / Cartridge Support ---
+KernalInit          := $A072             ; Initialize all hardware (vectors, probe & init all I/O)
+                                         ;   Caller MUST reset the stack pointer before JSR:
+                                         ;     ldx #$ff / txs / jsr KernalInit
+                                         ;   Zeroes BOOT_VECTOR, sets HW_PRESENT, IO_MODE, IRQ/BRK/NMI ptrs
+                                         ;   Does NOT reset the stack pointer
+                                         ;   Does NOT enable interrupts (caller must CLI)
+                                         ;   Does NOT play beep, display splash, or enter boot menu
+                                         ;   Does NOT halt if no console is detected
+                                         ;   Modifies: All registers, flags
+
+KernalVersion       := $A075             ; Get BIOS version
+                                         ;   Out: A = major version, X = minor version
 
 
 ; =============================================================================
@@ -637,6 +669,10 @@ VC_STATUS           := $9C01             ; Read — Status register
 ; =============================================================================
 ;   SECTION 6: USEFUL CONSTANTS
 ; =============================================================================
+
+; --- BIOS Version ---
+BIOS_VERSION_MAJOR  = 1
+BIOS_VERSION_MINOR  = 0
 
 ; --- ASCII Control Characters ---
 CHAR_BEL            = $07                ; Bell (Beep via SID)
