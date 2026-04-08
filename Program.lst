@@ -38,8 +38,8 @@ Current file: Program.asm
 000000r 2               ;   $A000-$A0FF   Kernal Jump Table (stable entry points)
 000000r 2               ;   $A100-$B7FF   Kernal Implementation
 000000r 2               ;   $B800-$BFFF   Character Set ROM (2 KB, 256 × 8-byte patterns)
-000000r 2               ;   $C000-$DFFF   Machine Code Monitor (8 KB)
-000000r 2               ;   $E000-$FEFF   BASIC Interpreter
+000000r 2               ;   $C000-$E7FF   BASIC Interpreter
+000000r 2               ;   $E800-$FEFF   Machine Code Monitor
 000000r 2               ;   $FF00-$FFF9   Wozmon (mini monitor)
 000000r 2               ;   $FFFA-$FFFF   CPU Vectors (NMI, RESET, IRQ)
 000000r 2               ;
@@ -57,7 +57,7 @@ Current file: Program.asm
 000000r 2               ;
 000000r 2               ;   CARTRIDGE SUPPORT
 000000r 2               ;   -----------------
-000000r 2               ;   Cartridges overlay $C000-$FFFF (Monitor, BASIC, Wozmon, vectors).
+000000r 2               ;   Cartridges overlay $C000-$FFFF (BASIC, Monitor, Wozmon, vectors).
 000000r 2               ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) remain
 000000r 2               ;   accessible.  Use KernalInit ($A072) to initialize all hardware and
 000000r 2               ;   return via RTS — interrupts are left disabled so the cart can set
@@ -343,7 +343,7 @@ Current file: Program.asm
 000000r 2                                                        ;   Uses VIA T1 if available, else software loop
 000000r 2                                                        ;   Modifies: A
 000000r 2               
-000000r 2               ; --- System ---
+000000r 2               ; --- System / Cartridge Support ---
 000000r 2               KernalInit          := $A078             ; Initialize all hardware (vectors, probe & init all I/O)
 000000r 2                                                        ;   Caller MUST reset the stack pointer before JSR:
 000000r 2                                                        ;     ldx #$ff / txs / jsr KernalInit
