@@ -92,9 +92,11 @@
 STR_PTR             := $02               ; 2 bytes — String pointer (used by FsLoadFile, FsSaveFile, FsDeleteFile, etc.)
 CF_BUF_PTR          := $24               ; 2 bytes — CF sector data buffer pointer
 CF_LBA              := $26               ; 4 bytes — CF 28-bit LBA address (little-endian)
+XFER_PTR            := $2A               ; 2 bytes — XModem transfer data pointer (source for XModemSave, dest for XModemLoad)
 
 ; Safe zero page range for user programs:
-; $36-$FF (202 bytes free)
+; $3A-$FF (198 bytes free)
+; Note: $36-$39 are used internally by XModemLoad/XModemSave and must not be relied upon across those calls
 
 
 ; =============================================================================
@@ -129,6 +131,9 @@ BRK_A               := $0313             ; Saved accumulator
 BRK_X               := $0314             ; Saved X register
 BRK_Y               := $0315             ; Saved Y register
 BRK_SP              := $0316             ; Saved stack pointer
+
+XFER_REMAIN         := $0317             ; 2 bytes — XModem byte count (output from XModemLoad; input to XModemSave)
+XFER_IO_SAVE        := $0319             ; 1 byte  — Saved IO_MODE during XModem transfer (internal use)
 
 ; RTC scratch (used by RtcWriteDate to pass century):
 RTC_BUF_CENT        := $030B             ; Century value for RtcReadDate / RtcWriteDate
@@ -278,17 +283,18 @@ SerialChrout        := $A051             ; Direct serial output (bypasses IO_MOD
                                          ;   Blocks until TX register is empty
 
 ; --- Serial Transfer ---
-AsciiLoad           := $A054             ; Receive raw binary via serial into PROGRAM_START
-                                         ;   Protocol: 2-byte size (lo/hi), then raw data bytes
-                                         ;   Temporarily switches IO_MODE to serial
-                                         ;   Out: C=0 success
+XModemLoad          := $A054             ; Receive data via XModem into memory
+                                         ;   Protocol: standard XModem (128-byte blocks, checksum)
+                                         ;   In: XFER_PTR = destination address
+                                         ;   Out: C=0 success, XFER_PTR advanced past last byte written
+                                         ;        XFER_REMAIN = total bytes received
+                                         ;        C=1 transfer failed (timeout or CAN received)
                                          ;   Modifies: A, X, Y
 
-AsciiSave           := $A057             ; Send program memory as raw binary via serial
-                                         ;   Protocol: 2-byte size (lo/hi), then raw data bytes
-                                         ;   Sends from PROGRAM_START to BAS_PRGEND
-                                         ;   Temporarily switches IO_MODE to serial
-                                         ;   Out: C=0 success
+XModemSave          := $A057             ; Send data via XModem from memory
+                                         ;   Protocol: standard XModem (128-byte blocks, checksum)
+                                         ;   In: XFER_PTR = source address, XFER_REMAIN = byte count
+                                         ;   Out: C=0 success, C=1 transfer failed (timeout or CAN received)
                                          ;   Modifies: A, X, Y
 
 ; --- RTC (DS1511Y) ---
@@ -433,6 +439,16 @@ FS_ENTRY_FLAGS      = 11                 ; Offset: flags byte within entry
 FS_ENTRY_START      = 12                 ; Offset: start sector (2 bytes, little-endian)
 FS_ENTRY_FSIZE      = 14                 ; Offset: file size (2 bytes, little-endian)
 FS_FLAG_USED        = %00000001          ; Flags bit 0: entry in use
+
+; XModem protocol constants (used with XModemLoad / XModemSave):
+XMODEM_SOH          = $01                ; Start of Header
+XMODEM_EOT          = $04                ; End of Transmission
+XMODEM_ACK          = $06                ; Acknowledge
+XMODEM_NAK          = $15                ; Negative Acknowledge (receiver sends to initiate transfer)
+XMODEM_CAN          = $18                ; Cancel
+XMODEM_SUB          = $1A                ; Padding byte (fills unused bytes in last block)
+XMODEM_BLKSZ        = 128               ; Data bytes per block
+XMODEM_MAXRETRY     = 10                ; Maximum retries before abort
 
 ; --- Serial Card (R65C51 ACIA) (IO 5: $9000-$9003) ---
 ;   Default config after InitSC: 8-N-1, 19200 baud, RX IRQ enabled
