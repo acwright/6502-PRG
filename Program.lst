@@ -454,8 +454,9 @@ Current file: Program.asm
 000000r 2               XMODEM_NAK          = $15                ; Negative Acknowledge (receiver sends to initiate transfer)
 000000r 2               XMODEM_CAN          = $18                ; Cancel
 000000r 2               XMODEM_SUB          = $1A                ; Padding byte (fills unused bytes in last block)
-000000r 2               XMODEM_BLKSZ        = 128               ; Data bytes per block
-000000r 2               XMODEM_MAXRETRY     = 10                ; Maximum retries before abort
+000000r 2               XMODEM_BLKSZ        = 128                ; Data bytes per block
+000000r 2               XMODEM_MAXRETRY     = 10                 ; Max retries per block during transfer
+000000r 2               XMODEM_STARTRETRY   = 60                 ; Retries waiting for initial connect (~60s)
 000000r 2               
 000000r 2               ; --- Serial Card (R65C51 ACIA) (IO 5: $9000-$9003) ---
 000000r 2               ;   Default config after InitSC: 8-N-1, 19200 baud, RX IRQ enabled
