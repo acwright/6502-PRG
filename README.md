@@ -1,7 +1,7 @@
 6502-PRG
 ========
 
-A 6502 assembly language program template for the [A.C. Wright 6502 project](https://github.com/acwright/6502).
+A 6502 assembly language program template for the [A.C. Wright 6502 project](https://github.com/acwright/6502-ACE).
 
 ## Overview
 
