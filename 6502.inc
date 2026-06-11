@@ -31,8 +31,8 @@
 ;   $A000-$A0FF   Kernal Jump Table (stable entry points)
 ;   $A100-$B7FF   Kernal Implementation
 ;   $B800-$BFFF   Character Set ROM (2 KB, 256 × 8-byte patterns)
-;   $C000-$E7FF   BASIC Interpreter
-;   $E800-$FEFF   Machine Code Monitor
+;   $C000-$EDFF   BASIC Interpreter
+;   $EE00-$FEFF   Machine Code Monitor
 ;   $FF00-$FFF9   Wozmon (mini monitor)
 ;   $FFFA-$FFFF   CPU Vectors (NMI, RESET, IRQ)
 ;
@@ -52,7 +52,7 @@
 ;   -----------------
 ;   Cartridges overlay $C000-$FFFF (BASIC, Monitor, Wozmon, vectors).
 ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) remain
-;   accessible.  Use KernalInit ($A072) to initialize all hardware and
+;   accessible.  Use KernalInit ($A078) to initialize all hardware and
 ;   return via RTS — interrupts are left disabled so the cart can set
 ;   up its own handlers first.  See usage patterns in the BIOS README.
 ;
@@ -213,6 +213,7 @@ VideoScroll         := $A024             ; Scroll screen up one line, clear bott
 VideoSetColor       := $A027             ; Set TMS9918 text color
                                          ;   In: A = color byte (high nibble = foreground, low nibble = background)
                                          ;   See TMS9918 Color Constants below
+                                         ;   Modifies: A
 
 VideoChroutRaw      := $A02A             ; Output char to video with no control-code handling
                                          ;   In: A = character code (0-255)
@@ -269,10 +270,12 @@ InitKB              := $A045             ; Initialize VIA for keyboard input
 ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
                                          ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
                                          ;   Temporarily disables matrix keyboard encoder
+                                         ;   Modifies: A, X
 
 ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
                                          ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
                                          ;   Temporarily disables PS/2 keyboard encoder
+                                         ;   Modifies: A, X
 
 ; --- Serial (R65C51) ---
 InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
@@ -340,7 +343,7 @@ StWaitReady         := $A072             ; Wait for CF to become ready (BSY=0, R
 SysDelay            := $A075             ; Delay for specified centiseconds (10 ms units)
                                          ;   In: A = low byte, X = high byte (16-bit count)
                                          ;   Uses VIA T1 if available, else software loop
-                                         ;   Modifies: A
+                                         ;   Modifies: A, X, Y (X/Y clobbered only in software-fallback path)
 
 ; --- System / Cartridge Support ---
 KernalInit          := $A078             ; Initialize all hardware (vectors, probe & init all I/O)
@@ -734,7 +737,7 @@ TMS_GRAY            = $E
 TMS_WHITE           = $F
 
 ; --- Monitor Entry Points ---
-;   The machine code monitor lives at $C000 and is entered normally via BRK.
+;   The machine code monitor lives at $EE00 and is entered normally via BRK.
 ;   These are useful if you want to jump there directly.
-MONITOR_ENTRY       := $C000             ; Cold entry (from boot menu or user code)
-MONITOR_BRK_ENTRY   := $C003             ; BRK entry (displays saved registers)
+MONITOR_ENTRY       := $EE00             ; Cold entry (from boot menu or user code)
+MONITOR_BRK_ENTRY   := $EE03             ; BRK entry (displays saved registers)
