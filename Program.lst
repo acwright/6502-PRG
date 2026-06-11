@@ -38,8 +38,8 @@ Current file: Program.asm
 000000r 2               ;   $A000-$A0FF   Kernal Jump Table (stable entry points)
 000000r 2               ;   $A100-$B7FF   Kernal Implementation
 000000r 2               ;   $B800-$BFFF   Character Set ROM (2 KB, 256 × 8-byte patterns)
-000000r 2               ;   $C000-$E7FF   BASIC Interpreter
-000000r 2               ;   $E800-$FEFF   Machine Code Monitor
+000000r 2               ;   $C000-$EDFF   BASIC Interpreter
+000000r 2               ;   $EE00-$FEFF   Machine Code Monitor
 000000r 2               ;   $FF00-$FFF9   Wozmon (mini monitor)
 000000r 2               ;   $FFFA-$FFFF   CPU Vectors (NMI, RESET, IRQ)
 000000r 2               ;
@@ -59,7 +59,7 @@ Current file: Program.asm
 000000r 2               ;   -----------------
 000000r 2               ;   Cartridges overlay $C000-$FFFF (BASIC, Monitor, Wozmon, vectors).
 000000r 2               ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) remain
-000000r 2               ;   accessible.  Use KernalInit ($A072) to initialize all hardware and
+000000r 2               ;   accessible.  Use KernalInit ($A078) to initialize all hardware and
 000000r 2               ;   return via RTS — interrupts are left disabled so the cart can set
 000000r 2               ;   up its own handlers first.  See usage patterns in the BIOS README.
 000000r 2               ;
@@ -220,6 +220,7 @@ Current file: Program.asm
 000000r 2               VideoSetColor       := $A027             ; Set TMS9918 text color
 000000r 2                                                        ;   In: A = color byte (high nibble = foreground, low nibble = background)
 000000r 2                                                        ;   See TMS9918 Color Constants below
+000000r 2                                                        ;   Modifies: A
 000000r 2               
 000000r 2               VideoChroutRaw      := $A02A             ; Output char to video with no control-code handling
 000000r 2                                                        ;   In: A = character code (0-255)
@@ -276,10 +277,12 @@ Current file: Program.asm
 000000r 2               ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
 000000r 2                                                        ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
 000000r 2                                                        ;   Temporarily disables matrix keyboard encoder
+000000r 2                                                        ;   Modifies: A, X
 000000r 2               
 000000r 2               ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
 000000r 2                                                        ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
 000000r 2                                                        ;   Temporarily disables PS/2 keyboard encoder
+000000r 2                                                        ;   Modifies: A, X
 000000r 2               
 000000r 2               ; --- Serial (R65C51) ---
 000000r 2               InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
@@ -347,7 +350,7 @@ Current file: Program.asm
 000000r 2               SysDelay            := $A075             ; Delay for specified centiseconds (10 ms units)
 000000r 2                                                        ;   In: A = low byte, X = high byte (16-bit count)
 000000r 2                                                        ;   Uses VIA T1 if available, else software loop
-000000r 2                                                        ;   Modifies: A
+000000r 2                                                        ;   Modifies: A, X, Y (X/Y clobbered only in software-fallback path)
 000000r 2               
 000000r 2               ; --- System / Cartridge Support ---
 000000r 2               KernalInit          := $A078             ; Initialize all hardware (vectors, probe & init all I/O)
@@ -741,10 +744,10 @@ Current file: Program.asm
 000000r 2               TMS_WHITE           = $F
 000000r 2               
 000000r 2               ; --- Monitor Entry Points ---
-000000r 2               ;   The machine code monitor lives at $C000 and is entered normally via BRK.
+000000r 2               ;   The machine code monitor lives at $EE00 and is entered normally via BRK.
 000000r 2               ;   These are useful if you want to jump there directly.
-000000r 2               MONITOR_ENTRY       := $C000             ; Cold entry (from boot menu or user code)
-000000r 2               MONITOR_BRK_ENTRY   := $C003             ; BRK entry (displays saved registers)
+000000r 2               MONITOR_ENTRY       := $EE00             ; Cold entry (from boot menu or user code)
+000000r 2               MONITOR_BRK_ENTRY   := $EE03             ; BRK entry (displays saved registers)
 000000r 2               
 000000r 1               
 000000r 1               .segment "CODE"
