@@ -10,7 +10,7 @@ Current file: Program.asm
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02
-000000r 2               ;   BIOS:      v1.0
+000000r 2               ;   BIOS:      v1.1
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
 000000r 2               ;   Include this file in external projects to access Kernal routines,
@@ -119,6 +119,7 @@ Current file: Program.asm
 000000r 2               VID_CURSOR_Y        := $0308             ; 1 byte  — Video cursor row (0-23)
 000000r 2               
 000000r 2               HW_PRESENT          := $030D             ; 1 byte  — Hardware present bitmask (set during boot probe)
+000000r 2               CF_DISK             := $030F             ; 1 byte  — Current CF disk bank (0–255); base LBA = CF_DISK × FS_DISK_SECTORS; reset to 0 on boot
 000000r 2               
 000000r 2               ; HW_PRESENT bit definitions (bit order matches IO slot numbers):
 000000r 2               HW_RAM_L            = %00000001          ; Bit 0: RAM card low  (IO 1, $8000-$83FF)
@@ -149,6 +150,8 @@ Current file: Program.asm
 000000r 2               BOOT_VECTOR         := $035B             ; 2 bytes — Boot redirect address (0=normal boot)
 000000r 2                                                        ;   Set after KernalInit to redirect Reset flow
 000000r 2                                                        ;   KernalInit zeroes this; write after init returns
+000000r 2               FS_IO_ADDR          := $037F             ; 2 bytes — Load/save target address for FsLoadFileAddr / FsSaveFileAddr
+000000r 2               FS_FILE_SIZE        := $034A             ; 2 bytes — File size in bytes (set by caller for FsSaveFileAddr; populated by FsLoadFileAddr)
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -247,11 +250,15 @@ Current file: Program.asm
 000000r 2                                                        ;   In: A = volume (0-15)
 000000r 2                                                        ;   Modifies: A
 000000r 2               
-000000r 2               ; --- Filesystem (simple 16-file directory on CF) ---
-000000r 2               ;   Directory lives at LBA 0 (512 bytes, 16 × 32-byte entries).
-000000r 2               ;   Data sectors start at LBA 1.
-000000r 2               ;   Filenames are 8.3 format, space-padded, case-insensitive.
+000000r 2               ; --- Filesystem (disk-banked, 16-file directory per disk) ---
+000000r 2               ;   The CF card is divided into 256 disk banks of 1 MB each (FS_DISK_SECTORS
+000000r 2               ;   sectors × 512 bytes).  CF_DISK ($030F) selects the active bank (reset to
+000000r 2               ;   0 on boot).  Use FsSetDisk / FsGetDisk to change it at runtime.  Each
+000000r 2               ;   bank has its own directory at the first sector, holding up to 16 entries
+000000r 2               ;   (8.3 filenames, space-padded, case-insensitive).  All FS routines and
+000000r 2               ;   StReadSector / StWriteSector operate on the selected bank automatically.
 000000r 2               ;   Pass null-terminated "NAME.EXT" string via STR_PTR ($02-$03).
+000000r 2               ;   Use FsLoadFileAddr / FsSaveFileAddr for load-to-address transfers.
 000000r 2               
 000000r 2               FsLoadFile          := $A03C             ; Load file from CF
 000000r 2                                                        ;   In: STR_PTR = pointer to null-terminated filename
@@ -366,6 +373,41 @@ Current file: Program.asm
 000000r 2               KernalVersion       := $A07B             ; Get BIOS version
 000000r 2                                                        ;   Out: A = major version, X = minor version
 000000r 2               
+000000r 2               ; --- Disk-banking & addressed storage (v1.1) ---
+000000r 2               ;   CF_DISK ($030F) selects the current disk bank (0–255).
+000000r 2               ;   All FS routines, StReadSector, and StWriteSector address the selected
+000000r 2               ;   bank automatically.  Bank changes survive until the next reset.
+000000r 2               
+000000r 2               FsLoadFileAddr      := $A07E             ; Load named file from current disk to FS_IO_ADDR
+000000r 2                                                        ;   In: STR_PTR = null-terminated filename
+000000r 2                                                        ;       FS_IO_ADDR ($037F) = destination address
+000000r 2                                                        ;   Out: C=0 success, FS_FILE_SIZE = bytes loaded; C=1 error
+000000r 2                                                        ;   Modifies: A, X, Y
+000000r 2               
+000000r 2               FsSaveFileAddr      := $A081             ; Save FS_FILE_SIZE bytes from FS_IO_ADDR to a named file
+000000r 2                                                        ;   In: STR_PTR = filename
+000000r 2                                                        ;       FS_IO_ADDR ($037F) = source address
+000000r 2                                                        ;       FS_FILE_SIZE ($034A) = byte count
+000000r 2                                                        ;   Out: C=0 success, C=1 error (disk full or write error)
+000000r 2                                                        ;   Modifies: A, X, Y
+000000r 2               
+000000r 2               FsFormatDisk        := $A084             ; Zero the current disk's directory (erases all 16 entries)
+000000r 2                                                        ;   Out: C=0 success, C=1 write error
+000000r 2                                                        ;   No confirmation prompt — caller is responsible
+000000r 2                                                        ;   Modifies: A, X, Y
+000000r 2               
+000000r 2               FsSetDisk           := $A087             ; Select the current CF disk bank
+000000r 2                                                        ;   In: A = disk number (0–255) → stored in CF_DISK ($030F)
+000000r 2                                                        ;   Modifies: Flags
+000000r 2               
+000000r 2               FsGetDisk           := $A08A             ; Get the current CF disk bank
+000000r 2                                                        ;   Out: A = CF_DISK value (0–255)
+000000r 2                                                        ;   Modifies: Flags, A
+000000r 2               
+000000r 2               FsPrintDisk         := $A08D             ; Print "DISK n" + CRLF via Chrout (decimal, no leading zeros)
+000000r 2                                                        ;   Uses current CF_DISK
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
 000000r 2               ;   SECTION 5: IO HARDWARE REGISTERS
@@ -449,6 +491,7 @@ Current file: Program.asm
 000000r 2               FS_ENTRY_START      = 12                 ; Offset: start sector (2 bytes, little-endian)
 000000r 2               FS_ENTRY_FSIZE      = 14                 ; Offset: file size (2 bytes, little-endian)
 000000r 2               FS_FLAG_USED        = %00000001          ; Flags bit 0: entry in use
+000000r 2               FS_DISK_SECTORS     = 2048               ; Sectors per disk bank (2048 × 512 bytes = 1 MB); 256 banks = 256 MB total
 000000r 2               
 000000r 2               ; XModem protocol constants (used with XModemLoad / XModemSave):
 000000r 2               XMODEM_SOH          = $01                ; Start of Header
@@ -707,7 +750,7 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; --- BIOS Version ---
 000000r 2               BIOS_VERSION_MAJOR  = 1
-000000r 2               BIOS_VERSION_MINOR  = 0
+000000r 2               BIOS_VERSION_MINOR  = 1
 000000r 2               
 000000r 2               ; --- ASCII Control Characters ---
 000000r 2               CHAR_BEL            = $07                ; Bell (Beep via SID)
