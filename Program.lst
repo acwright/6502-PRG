@@ -10,7 +10,7 @@ Current file: Program.asm
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02
-000000r 2               ;   BIOS:      v1.1
+000000r 2               ;   BIOS:      v1.2
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
 000000r 2               ;   Include this file in external projects to access Kernal routines,
@@ -408,6 +408,16 @@ Current file: Program.asm
 000000r 2                                                        ;   Uses current CF_DISK
 000000r 2                                                        ;   Modifies: Flags, A, X, Y
 000000r 2               
+000000r 2               ; --- General Output Utilities (console routed by IO_MODE via Chrout) ---
+000000r 2               PrintStr            := $A090             ; Print a NUL-terminated string
+000000r 2                                                        ;   In : A = string addr low, Y = string addr high
+000000r 2                                                        ;   Modifies: Flags, A, Y, STR_PTR (X preserved)
+000000r 2               PrintCRLF           := $A093             ; Print CR ($0D) then LF ($0A)
+000000r 2                                                        ;   Modifies: Flags, A
+000000r 2               PrintDecU16         := $A096             ; Print an unsigned 16-bit value as decimal
+000000r 2                                                        ;   In : A = value low, X = value high (no leading zeros)
+000000r 2                                                        ;   Modifies: Flags, A, X, Y, FS_FILE_SIZE, FS_DIR_IDX
+000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
 000000r 2               ;   SECTION 5: IO HARDWARE REGISTERS
@@ -750,7 +760,7 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; --- BIOS Version ---
 000000r 2               BIOS_VERSION_MAJOR  = 1
-000000r 2               BIOS_VERSION_MINOR  = 1
+000000r 2               BIOS_VERSION_MINOR  = 2
 000000r 2               
 000000r 2               ; --- ASCII Control Characters ---
 000000r 2               CHAR_BEL            = $07                ; Bell (Beep via SID)
@@ -826,42 +836,25 @@ Current file: Program.asm
 00000Cr 1  20 18 A0       jsr VideoClear                ; Clear video screen
 00000Fr 1               
 00000Fr 1  A9 rr          lda #<HelloMsg
-000011r 1  85 02          sta STR_PTR
-000013r 1  A9 rr          lda #>HelloMsg
-000015r 1  85 03          sta STR_PTR + 1
-000017r 1  20 rr rr       jsr PrintStr                  ; Print the message
-00001Ar 1               
-00001Ar 1               @WaitKey:
-00001Ar 1  20 03 A0       jsr Chrin                     ; Poll for a keypress (non-blocking)
-00001Dr 1  90 FB          bcc @WaitKey                  ; Loop until character available (C=1)
+000011r 1  A0 rr          ldy #>HelloMsg
+000013r 1  20 90 A0       jsr PrintStr                  ; Print the message
+000016r 1               
+000016r 1               @WaitKey:
+000016r 1  20 03 A0       jsr Chrin                     ; Poll for a keypress (non-blocking)
+000019r 1  90 FB          bcc @WaitKey                  ; Loop until character available (C=1)
+00001Br 1               
+00001Br 1  20 18 A0       jsr VideoClear                ; Clear screen before returning
+00001Er 1  60             rts                           ; Return to BASIC
 00001Fr 1               
-00001Fr 1  20 18 A0       jsr VideoClear                ; Clear screen before returning
-000022r 1  60             rts                           ; Return to BASIC
-000023r 1               
-000023r 1               ; =============================================================================
-000023r 1               ;   PrintStr — Print a null-terminated string via Chrout
-000023r 1               ;   In: STR_PTR ($02-$03) = pointer to string
-000023r 1               ; =============================================================================
-000023r 1               PrintStr:
-000023r 1  A0 00          ldy #$00
-000025r 1               @PrintLoop:
-000025r 1  B1 02          lda (STR_PTR),y
-000027r 1  F0 06          beq @PrintDone                ; Null terminator — done
-000029r 1  20 00 A0       jsr Chrout
-00002Cr 1  C8             iny
-00002Dr 1  D0 F6          bne @PrintLoop                ; Max 256 chars per call
-00002Fr 1               @PrintDone:
-00002Fr 1  60             rts
-000030r 1               
-000030r 1               ; =============================================================================
-000030r 1               ;   Data
-000030r 1               ; =============================================================================
-000030r 1               
-000030r 1               HelloMsg:
-000030r 1  48 65 6C 6C    .byte "Hello from Program!", CHAR_CR, CHAR_LF
-000034r 1  6F 20 66 72  
-000038r 1  6F 6D 20 50  
-000045r 1  50 72 65 73    .byte "Press any key to return to BASIC.", CHAR_CR, CHAR_LF, $00
-000049r 1  73 20 61 6E  
-00004Dr 1  79 20 6B 65  
-000068r 1               
+00001Fr 1               ; =============================================================================
+00001Fr 1               ;   Data
+00001Fr 1               ; =============================================================================
+00001Fr 1               
+00001Fr 1               HelloMsg:
+00001Fr 1  48 65 6C 6C    .byte "Hello from Program!", CHAR_CR, CHAR_LF
+000023r 1  6F 20 66 72  
+000027r 1  6F 6D 20 50  
+000034r 1  50 72 65 73    .byte "Press any key to return to BASIC.", CHAR_CR, CHAR_LF, $00
+000038r 1  73 20 61 6E  
+00003Cr 1  79 20 6B 65  
+000057r 1               

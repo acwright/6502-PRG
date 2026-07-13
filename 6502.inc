@@ -3,7 +3,7 @@
 ; =============================================================================
 ;
 ;   CPU:       WDC 65C02
-;   BIOS:      v1.1
+;   BIOS:      v1.2
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
 ;   Include this file in external projects to access Kernal routines,
@@ -401,6 +401,16 @@ FsPrintDisk         := $A08D             ; Print "DISK n" + CRLF via Chrout (dec
                                          ;   Uses current CF_DISK
                                          ;   Modifies: Flags, A, X, Y
 
+; --- General Output Utilities (console routed by IO_MODE via Chrout) ---
+PrintStr            := $A090             ; Print a NUL-terminated string
+                                         ;   In : A = string addr low, Y = string addr high
+                                         ;   Modifies: Flags, A, Y, STR_PTR (X preserved)
+PrintCRLF           := $A093             ; Print CR ($0D) then LF ($0A)
+                                         ;   Modifies: Flags, A
+PrintDecU16         := $A096             ; Print an unsigned 16-bit value as decimal
+                                         ;   In : A = value low, X = value high (no leading zeros)
+                                         ;   Modifies: Flags, A, X, Y, FS_FILE_SIZE, FS_DIR_IDX
+
 
 ; =============================================================================
 ;   SECTION 5: IO HARDWARE REGISTERS
@@ -743,7 +753,7 @@ VC_STATUS           := $9C01             ; Read — Status register
 
 ; --- BIOS Version ---
 BIOS_VERSION_MAJOR  = 1
-BIOS_VERSION_MINOR  = 1
+BIOS_VERSION_MINOR  = 2
 
 ; --- ASCII Control Characters ---
 CHAR_BEL            = $07                ; Bell (Beep via SID)

@@ -33,9 +33,7 @@ Start:
   jsr VideoClear                ; Clear video screen
 
   lda #<HelloMsg
-  sta STR_PTR
-  lda #>HelloMsg
-  sta STR_PTR + 1
+  ldy #>HelloMsg
   jsr PrintStr                  ; Print the message
 
 @WaitKey:
@@ -44,21 +42,6 @@ Start:
 
   jsr VideoClear                ; Clear screen before returning
   rts                           ; Return to BASIC
-
-; =============================================================================
-;   PrintStr — Print a null-terminated string via Chrout
-;   In: STR_PTR ($02-$03) = pointer to string
-; =============================================================================
-PrintStr:
-  ldy #$00
-@PrintLoop:
-  lda (STR_PTR),y
-  beq @PrintDone                ; Null terminator — done
-  jsr Chrout
-  iny
-  bne @PrintLoop                ; Max 256 chars per call
-@PrintDone:
-  rts
 
 ; =============================================================================
 ;   Data
