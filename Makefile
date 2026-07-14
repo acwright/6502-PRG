@@ -16,7 +16,7 @@ woz:
 	bin2woz -a 0x0800 $(TARGET).prg > $(TARGET).woz
 
 cf:
-	cffs create $(TARGET).img
+	cffs create $(TARGET).img --size 1M
 	cp -f $(TARGET).prg $(EIGHTTHREE).PRG || true
 	cffs add $(TARGET).img $(EIGHTTHREE).PRG
 

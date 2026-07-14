@@ -40,7 +40,7 @@ The first 12 bytes of every program file contain a tokenized BASIC line that ser
 | `$0801` | `$08` | Next-line pointer hi |
 | `$0802` | `$0A` | Line number 10 (lo) |
 | `$0803` | `$00` | Line number 10 (hi) |
-| `$0804` | `$9E` | `TOK_SYS` |
+| `$0804` | `$A5` | `TOK_SYS` |
 | `$0805` | `$32` | `'2'` |
 | `$0806` | `$30` | `'0'` |
 | `$0807` | `$36` | `'6'` |

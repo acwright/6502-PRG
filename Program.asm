@@ -12,7 +12,7 @@
 ;   jumps to the machine code entry point at $080C (decimal 2060).
 ;   This stub must remain at the very start of the program.
 
-BasicStartup: .byte $0A, $08, $0A, $00, $9E, $32, $30, $36, $30, $00, $00, $00
+BasicStartup: .byte $0A, $08, $0A, $00, $A5, $32, $30, $36, $30, $00, $00, $00
 
 ; =============================================================================
 ;   Start — Program entry point ($080C)
