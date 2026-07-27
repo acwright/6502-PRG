@@ -202,7 +202,12 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; --- Video (TMS9918 / pico9918) ---
 000000r 2               InitVideo           := $A015             ; Initialize TMS9918 (text mode, 40×24)
-000000r 2                                                        ;   Modifies: A, X
+000000r 2                                                        ;   Writes the 8 mode registers, then reloads the
+000000r 2                                                        ;   character set into the pattern table (VRAM $0800)
+000000r 2                                                        ;   A program that switched the VDP to a graphics mode
+000000r 2                                                        ;   can fully restore text mode with this one call
+000000r 2                                                        ;   STR_PTR is used internally but saved and restored
+000000r 2                                                        ;   Modifies: A, X, Y
 000000r 2               
 000000r 2               VideoClear          := $A018             ; Clear screen (fill with spaces), reset cursor to (0,0)
 000000r 2                                                        ;   Modifies: A, X, Y

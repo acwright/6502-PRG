@@ -195,7 +195,12 @@ GetIOMode           := $A012             ; Get IO_MODE
 
 ; --- Video (TMS9918 / pico9918) ---
 InitVideo           := $A015             ; Initialize TMS9918 (text mode, 40×24)
-                                         ;   Modifies: A, X
+                                         ;   Writes the 8 mode registers, then reloads the
+                                         ;   character set into the pattern table (VRAM $0800)
+                                         ;   A program that switched the VDP to a graphics mode
+                                         ;   can fully restore text mode with this one call
+                                         ;   STR_PTR is used internally but saved and restored
+                                         ;   Modifies: A, X, Y
 
 VideoClear          := $A018             ; Clear screen (fill with spaces), reset cursor to (0,0)
                                          ;   Modifies: A, X, Y
