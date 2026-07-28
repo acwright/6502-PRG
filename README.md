@@ -9,7 +9,7 @@ Programs for this system are loaded into RAM at `$0800` and executed from BASIC.
 
 ### How It Works
 
-1. The program is loaded into RAM at `$0800` (via `LOAD` from CompactFlash, serial transfer, or Wozmon)
+1. The program is loaded into RAM at `$0800` — normally with BASIC's `LOAD`, from CompactFlash or over serial
 2. BASIC's `RUN` command executes the tokenized stub at the start of the file
 3. The stub decodes to `10 SYS 2060`, which calls the machine code entry point at `$080C`
 4. Your program runs with full access to the Kernal jump table
@@ -135,20 +135,47 @@ Produces:
 
 ### Loading & Running
 
-**From BASIC (CompactFlash):**
+Use BASIC's `LOAD`. Requires BIOS v1.3 or later.
+
+**From CompactFlash** — the usual case:
 ```
 LOAD "PROGRAM.PRG"
 RUN
 ```
 
-**From Wozmon (serial):**
-Upload `Program.woz` via the serial port at 19200 baud.
-
-**From BASIC (serial):**
+**Over serial**, with no CF card:
 ```
 LOAD
 ```
-Then send `Program.prg` from the host using the raw binary serial protocol (2-byte size header + data).
+Then send `Program.prg` from the host with any terminal that speaks XMODEM
+(128-byte blocks, checksum mode). The transfer is padded up to a block boundary,
+which is harmless.
+
+Either way, `RUN` executes the stub and `SYS 2060` enters your code at `$080C`.
+
+**From the Monitor**, if you are already there:
+```
+L "PROGRAM.PRG"
+X
+```
+`L` loads to `$0800` by default and `X` returns to BASIC, where `RUN` works as
+usual.
+
+#### Why the loader matters
+
+Your machine code lives past the end-of-program marker at `$080A`, where BASIC
+would otherwise put its variables. Keeping the two apart depends on the loader
+telling BASIC how many bytes it wrote, so BASIC can place `VARTAB` past the whole
+image rather than at the end of the tokenized line chain.
+
+`LOAD` and the Monitor's `L` both do this as of BIOS v1.3. **Wozmon does not** —
+it writes bytes one at a time with no notion of a length, so BASIC falls back to
+walking the line chain, `VARTAB` lands at `$080C` on top of your code, and the
+first variable assignment destroys it. Use Wozmon for code you will enter from
+the Monitor, not for programs you intend to `RUN`.
+
+On BIOS versions before v1.3 the byte count was discarded on every path, so all
+three loaders had this problem.
 
 ## Template Structure
 

@@ -3,7 +3,7 @@
 ; =============================================================================
 ;
 ;   CPU:       WDC 65C02
-;   BIOS:      v1.2
+;   BIOS:      v1.3
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
 ;   Include this file in external projects to access Kernal routines,
@@ -13,12 +13,13 @@
 ;   ----------
 ;   $0000-$0003   Zero Page: System pointers (see below)
 ;   $0004-$0023   Zero Page: Reserved by BASIC interpreter
-;   $0024-$0035   Zero Page: System scratch (CF, serial, delay, monitor)
-;   $0036-$00FF   Zero Page: Free for user programs
+;   $0024-$0039   Zero Page: System scratch (CF, serial, delay, monitor, XModem)
+;   $003A-$00FF   Zero Page: Free for user programs
 ;   $0100-$01FF   CPU Stack
 ;   $0200-$02FF   Input Buffer (ring buffer, managed by Kernal)
 ;   $0300-$03FF   Kernal Variables (vectors, cursor, HW flags, etc.)
-;   $0400-$07FF   User Variables / BASIC workspace
+;   $0400-$05FF   User Variables / BASIC workspace
+;   $0600-$07FF   FS sector buffer (clobbered by any FS/St routine call)
 ;   $0800-$7FFF   Program RAM (30 KB — load address for user code)
 ;   $8000-$83FF   IO 1: Banked RAM Low  (256 × ~1 KB banks)
 ;   $8400-$87FF   IO 2: Banked RAM High (256 × ~1 KB banks)
@@ -146,6 +147,16 @@ BOOT_VECTOR         := $035B             ; 2 bytes — Boot redirect address (0=
 FS_IO_ADDR          := $037F             ; 2 bytes — Load/save target address for FsLoadFileAddr / FsSaveFileAddr
 FS_FILE_SIZE        := $034A             ; 2 bytes — File size in bytes (set by caller for FsSaveFileAddr; populated by FsLoadFileAddr)
 
+; Program image handoff (v1.3):
+PRG_IMAGE_END       := $038E             ; 2 bytes — End address of a program image placed at
+                                         ;   PROGRAM_START by a loader running outside BASIC
+                                         ;   (e.g. the Monitor's L command); 0 = none.
+                                         ;   KernalInit zeroes it; BASIC consumes and re-zeroes it
+                                         ;   on entry, so a stale value is never acted on twice.
+                                         ;   A loader that drops a .prg at $0800 and then hands
+                                         ;   off to BASIC should write the end address here so
+                                         ;   the attached machine code survives LOAD/SAVE.
+
 
 ; =============================================================================
 ;   SECTION 3: KEY MEMORY LOCATIONS
@@ -154,6 +165,7 @@ FS_FILE_SIZE        := $034A             ; 2 bytes — File size in bytes (set b
 INPUT_BUFFER        := $0200             ; $0200-$02FF — 256-byte ring buffer (keyboard/serial input)
 PROGRAM_START       := $0800             ; User programs and BASIC programs load here
 ;                                        ; Program space extends to $7FFF (30 KB)
+MEMORY_TOP          := $8000             ; First address past usable RAM (IO space starts here)
 
 
 ; =============================================================================
@@ -238,10 +250,14 @@ Beep                := $A030             ; Play short beep tone (~475 Hz)
 
 SidPlayNote         := $A033             ; Play note on a SID voice
                                          ;   In: A = voice (0-2), X = freq low, Y = freq high
-                                         ;   Uses triangle waveform, ADSR: A=0 D=9 S=A R=2
+                                         ;   Uses triangle waveform, ADSR: A=0 D=9 S=F R=8
+                                         ;   Full sustain holds the note flat until gated off
                                          ;   Modifies: A
 
-SidSilence          := $A036             ; Silence all 3 SID voices (gate off, zero freq)
+SidSilence          := $A036             ; Silence all 3 SID voices (gate off only)
+                                         ;   Frequencies are left intact — the envelope release
+                                         ;   rings the tone out.  Zeroing freq would freeze the
+                                         ;   waveform and decay a DC offset (audible thump)
                                          ;   Modifies: A
 
 SidSetVolume        := $A039             ; Set SID master volume
@@ -257,6 +273,10 @@ SidSetVolume        := $A039             ; Set SID master volume
 ;   StReadSector / StWriteSector operate on the selected bank automatically.
 ;   Pass null-terminated "NAME.EXT" string via STR_PTR ($02-$03).
 ;   Use FsLoadFileAddr / FsSaveFileAddr for load-to-address transfers.
+;   The extension is inert — nothing in the BIOS branches on it, so .PRG, .BAS
+;   and .FOO behave identically.  What a file means is decided by the routine
+;   that loads it, never by its name.
+;   All FS routines use $0600-$07FF as a 512-byte sector buffer.
 
 FsLoadFile          := $A03C             ; Load file from CF
                                          ;   In: STR_PTR = pointer to null-terminated filename
@@ -361,7 +381,8 @@ SysDelay            := $A075             ; Delay for specified centiseconds (10 
 KernalInit          := $A078             ; Initialize all hardware (vectors, probe & init all I/O)
                                          ;   Caller MUST reset the stack pointer before JSR:
                                          ;     ldx #$ff / txs / jsr KernalInit
-                                         ;   Zeroes BOOT_VECTOR, sets HW_PRESENT, IO_MODE, IRQ/BRK/NMI ptrs
+                                         ;   Zeroes BOOT_VECTOR, PRG_IMAGE_END and CF_DISK;
+                                         ;   sets HW_PRESENT, IO_MODE, IRQ/BRK/NMI ptrs
                                          ;   Does NOT reset the stack pointer
                                          ;   Does NOT enable interrupts (caller must CLI)
                                          ;   Does NOT play beep, display splash, or enter boot menu
@@ -451,6 +472,12 @@ RTC_RAM_ADDR        := $8810             ; NVRAM address register
 RTC_RAM_DATA        := $8813             ; NVRAM data register
 ; Control Register B bits:
 RTC_CTRL_B_TE       := %10000000         ; Transfer Enable — set to inhibit clock updates during write
+; Month register ($8805) — the upper 3 bits are oscillator/SQW control, not month data.
+; Always mask with RTC_MON_MASK when reading the month, and preserve these bits on write.
+RTC_MON_MASK        := %00011111         ; Month value occupies the low 5 bits
+RTC_MON_EOSC        := %10000000         ; Oscillator Start/Stop (0 = oscillator running)
+RTC_MON_E32K        := %01000000         ; 32 kHz square-wave enable (1 = SQW output disabled)
+RTC_MON_BB32        := %00100000         ; Battery-backup 32 kHz SQW enable (1 = enabled in backup)
 
 ; --- CompactFlash / Storage (IO 4: $8C00-$8C07) ---
 ;   8-bit IDE (True IDE) mode.  The BIOS issues Set Features $01 at boot
@@ -758,7 +785,7 @@ VC_STATUS           := $9C01             ; Read — Status register
 
 ; --- BIOS Version ---
 BIOS_VERSION_MAJOR  = 1
-BIOS_VERSION_MINOR  = 2
+BIOS_VERSION_MINOR  = 3
 
 ; --- ASCII Control Characters ---
 CHAR_BEL            = $07                ; Bell (Beep via SID)
