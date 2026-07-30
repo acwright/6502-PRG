@@ -110,6 +110,10 @@ npm install -g cffs-image-tool
 
 Creates CompactFlash disk images with the program file. See the [cffs project](https://github.com/acwright/cffs).
 
+#### 6502 CLI (optional — for `make run`)
+
+Installed via the [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) app's Settings → Command Line → Install.
+
 ### Build Commands
 
 | Command | Description |
@@ -119,6 +123,7 @@ Creates CompactFlash disk images with the program file. See the [cffs project](h
 | `make view` | Display hexdump of the built program |
 | `make woz` | Create Wozmon-compatible file (`Program.woz`) |
 | `make cf` | Create CompactFlash disk image with the program |
+| `make run` | Launch the emulator app with the built program loaded |
 | `make clean` | Remove build artifacts |
 
 ### Build Output

@@ -12,6 +12,9 @@ build: $(TARGET).asm
 view:
 	hexdump -C $(TARGET).prg
 
+run:
+	6502 run $(TARGET).prg
+
 woz:
 	bin2woz -a 0x0800 $(TARGET).prg > $(TARGET).woz
 
