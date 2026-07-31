@@ -9,8 +9,8 @@ Current file: Program.asm
 000000r 2               ;   6502.inc — External include file for the 6502 system
 000000r 2               ; =============================================================================
 000000r 2               ;
-000000r 2               ;   CPU:       WDC 65C02
-000000r 2               ;   BIOS:      v1.3
+000000r 2               ;   CPU:       WDC 65C02S
+000000r 2               ;   BIOS:      v1.4
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
 000000r 2               ;   Include this file in external projects to access Kernal routines,
@@ -55,6 +55,16 @@ Current file: Program.asm
 000000r 2               ;   Otherwise a console check halts if no video/serial is found, then
 000000r 2               ;   the splash screen and boot menu are displayed.  ENTER launches
 000000r 2               ;   BASIC; ESC enters the Monitor.  A 5-second timeout auto-boots BASIC.
+000000r 2               ;   The splash is drawn on whichever console is active — centred on the
+000000r 2               ;   40-column screen, or left-aligned as plain text over serial.
+000000r 2               ;
+000000r 2               ;   GRACEFUL DEGRADATION
+000000r 2               ;   --------------------
+000000r 2               ;   Every Kernal routine that drives a card checks HW_PRESENT first, so
+000000r 2               ;   a call on a machine without that card is safe rather than a crash.
+000000r 2               ;   Routines with nothing to report back return silently (video and SID);
+000000r 2               ;   routines that move data report failure in the carry (CompactFlash).
+000000r 2               ;   The per-routine notes below say which behaviour each one has.
 000000r 2               ;
 000000r 2               ;   CARTRIDGE SUPPORT
 000000r 2               ;   -----------------
@@ -95,7 +105,7 @@ Current file: Program.asm
 000000r 2               ; =============================================================================
 000000r 2               ; These zero page locations are used by the Kernal.  External programs may
 000000r 2               ; use STR_PTR and CF_BUF_PTR/CF_LBA as parameters to Kernal calls.
-000000r 2               ; Locations $36-$FF are free for user programs.
+000000r 2               ; Locations $3A-$FF are free for user programs.
 000000r 2               
 000000r 2               STR_PTR             := $02               ; 2 bytes — String pointer (used by FsLoadFile, FsSaveFile, FsDeleteFile, etc.)
 000000r 2               CF_BUF_PTR          := $24               ; 2 bytes — CF sector data buffer pointer
@@ -104,7 +114,8 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; Safe zero page range for user programs:
 000000r 2               ; $3A-$FF (198 bytes free)
-000000r 2               ; Note: $36-$39 are used internally by XModemLoad/XModemSave and must not be relied upon across those calls
+000000r 2               ; Note: $2E-$35 belong to the Monitor and $36-$39 to XModemLoad/XModemSave;
+000000r 2               ;       neither range survives a call into those routines
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -222,6 +233,7 @@ Current file: Program.asm
 000000r 2                                                        ;   Modifies: A, X, Y
 000000r 2               
 000000r 2               VideoClear          := $A018             ; Clear screen (fill with spaces), reset cursor to (0,0)
+000000r 2                                                        ;   Skips silently if no video card is fitted
 000000r 2                                                        ;   Modifies: A, X, Y
 000000r 2               
 000000r 2               VideoPutChar        := $A01B             ; Write character at cursor position (no cursor advance)
@@ -229,6 +241,7 @@ Current file: Program.asm
 000000r 2               
 000000r 2               VideoSetCursor      := $A01E             ; Set cursor position
 000000r 2                                                        ;   In: X = column (0-39), Y = row (0-23)
+000000r 2                                                        ;   Skips silently if no video card is fitted
 000000r 2                                                        ;   Modifies: A
 000000r 2               
 000000r 2               VideoGetCursor      := $A021             ; Get cursor position
@@ -240,6 +253,7 @@ Current file: Program.asm
 000000r 2               VideoSetColor       := $A027             ; Set TMS9918 text color
 000000r 2                                                        ;   In: A = color byte (high nibble = foreground, low nibble = background)
 000000r 2                                                        ;   See TMS9918 Color Constants below
+000000r 2                                                        ;   Skips silently if no video card is fitted
 000000r 2                                                        ;   Modifies: A
 000000r 2               
 000000r 2               VideoChroutRaw      := $A02A             ; Output char to video with no control-code handling
@@ -259,16 +273,19 @@ Current file: Program.asm
 000000r 2                                                        ;   In: A = voice (0-2), X = freq low, Y = freq high
 000000r 2                                                        ;   Uses triangle waveform, ADSR: A=0 D=9 S=F R=8
 000000r 2                                                        ;   Full sustain holds the note flat until gated off
+000000r 2                                                        ;   Skips silently if no SID is fitted
 000000r 2                                                        ;   Modifies: A
 000000r 2               
 000000r 2               SidSilence          := $A036             ; Silence all 3 SID voices (gate off only)
 000000r 2                                                        ;   Frequencies are left intact — the envelope release
 000000r 2                                                        ;   rings the tone out.  Zeroing freq would freeze the
 000000r 2                                                        ;   waveform and decay a DC offset (audible thump)
+000000r 2                                                        ;   Skips silently if no SID is fitted
 000000r 2                                                        ;   Modifies: A
 000000r 2               
 000000r 2               SidSetVolume        := $A039             ; Set SID master volume
-000000r 2                                                        ;   In: A = volume (0-15)
+000000r 2                                                        ;   In: A = volume (0-15); only the low nibble is used
+000000r 2                                                        ;   Skips silently if no SID is fitted
 000000r 2                                                        ;   Modifies: A
 000000r 2               
 000000r 2               ; --- Filesystem (disk-banked, 16-file directory per disk) ---
@@ -306,15 +323,31 @@ Current file: Program.asm
 000000r 2                                                        ;   Modifies: A
 000000r 2               
 000000r 2               ; --- Joysticks ---
+000000r 2               ;   Both ports are ACTIVE LOW — each line is pulled up through 1K and grounded
+000000r 2               ;   by its switch — and both routines return the port read raw.  So a held
+000000r 2               ;   button is a 0 bit and an untouched stick reads $FF:
+000000r 2               ;
+000000r 2               ;     Bit:  7   6   5   4   3   2   1   0
+000000r 2               ;           R   L   D   U   Y   X   B   A
+000000r 2               ;
+000000r 2               ;   Test a direction with:  lda ... / and #%00010000 / beq @UpHeld
+000000r 2               ;
+000000r 2               ;   Neither routine checks HW_PRESENT — with no GPIO card fitted they read a
+000000r 2               ;   floating bus and the value is meaningless.  Test HW_GPIO first if the card
+000000r 2               ;   may be absent.  (BASIC's JOY() does this and reports $FF.)
+000000r 2               ;
+000000r 2               ;   Both routines SEI on entry and CLI on exit unconditionally, so calling
+000000r 2               ;   either one from inside an interrupt-disabled section re-enables interrupts.
+000000r 2               
 000000r 2               ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
-000000r 2                                                        ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
+000000r 2                                                        ;   Out: A = bitmask (active low, see above)
 000000r 2                                                        ;   Temporarily disables matrix keyboard encoder
-000000r 2                                                        ;   Modifies: A, X
+000000r 2                                                        ;   Modifies: A, X; enables interrupts
 000000r 2               
 000000r 2               ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
-000000r 2                                                        ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
+000000r 2                                                        ;   Out: A = bitmask (active low, see above)
 000000r 2                                                        ;   Temporarily disables PS/2 keyboard encoder
-000000r 2                                                        ;   Modifies: A, X
+000000r 2                                                        ;   Modifies: A, X; enables interrupts
 000000r 2               
 000000r 2               ; --- Serial (R65C51) ---
 000000r 2               InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
@@ -376,6 +409,10 @@ Current file: Program.asm
 000000r 2               
 000000r 2               StWaitReady         := $A072             ; Wait for CF to become ready (BSY=0, RDY=1)
 000000r 2                                                        ;   Out: C=0 ready, C=1 timeout/error
+000000r 2                                                        ;   Returns C=1 at once if the boot probe found no CF
+000000r 2                                                        ;   card, rather than spinning out the full timeout.
+000000r 2                                                        ;   Every FS and sector routine passes through here, so
+000000r 2                                                        ;   an empty slot fails fast throughout the stack
 000000r 2                                                        ;   Modifies: A, X, Y
 000000r 2               
 000000r 2               ; --- Timing ---
@@ -792,7 +829,7 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; --- BIOS Version ---
 000000r 2               BIOS_VERSION_MAJOR  = 1
-000000r 2               BIOS_VERSION_MINOR  = 3
+000000r 2               BIOS_VERSION_MINOR  = 4
 000000r 2               
 000000r 2               ; --- ASCII Control Characters ---
 000000r 2               CHAR_BEL            = $07                ; Bell (Beep via SID)

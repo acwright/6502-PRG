@@ -19,12 +19,13 @@ Programs for this system are loaded into RAM at `$0800` and executed from BASIC.
 
 | Range | Contents |
 |-------|----------|
-| `$0000–$0035` | Zero page — system pointers (see `6502.inc` for details) |
-| `$0036–$00FF` | Zero page — **free for user programs** (202 bytes) |
+| `$0000–$0039` | Zero page — system pointers, Monitor and XModem scratch (see `6502.inc` for details) |
+| `$003A–$00FF` | Zero page — **free for user programs** (198 bytes) |
 | `$0100–$01FF` | CPU stack |
 | `$0200–$02FF` | Input ring buffer (managed by Kernal) |
 | `$0300–$03FF` | Kernal variables (vectors, cursor, HW flags, etc.) |
-| `$0400–$07FF` | User/BASIC variables |
+| `$0400–$05FF` | User/BASIC variables |
+| `$0600–$07FF` | CompactFlash sector buffer — clobbered by any filesystem call |
 | `$0800–$080B` | **BASIC startup stub** (`10 SYS 2060`) |
 | `$080C–$7FFF` | **Your program code and data** (~30 KB available) |
 | `$8000–$9FFF` | I/O hardware registers |
@@ -57,7 +58,7 @@ The system is already fully initialized when your program runs. Key entry points
 | Address | Routine | Description |
 |---------|---------|-------------|
 | `$A000` | `Chrout` | Output character (routed by IO_MODE) |
-| `$A003` | `Chrin` | Read character from input buffer (blocking) |
+| `$A003` | `Chrin` | Read character from input buffer (non-blocking — C=1 with the character in A, C=0 if none; loop for blocking behaviour) |
 | `$A00C` | `BufferSize` | Number of unread bytes in input buffer |
 | `$A018` | `VideoClear` | Clear screen and reset cursor |
 | `$A01B` | `VideoPutChar` | Write character at cursor position |
@@ -199,3 +200,15 @@ three loaders had this problem.
 4. Add additional `.asm` files and `.include` them as needed
 5. You have ~30 KB of RAM (`$080C–$7FFF`) for code and data
 
+## Related
+
+- [6502-ACE](https://github.com/acwright/6502-ACE) — the hardware, and the index of the whole family
+- [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind the Kernal jump table; `6502.inc` here tracks its published API
+- [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run a program without hardware (`make run`)
+- [6502-CRT](https://github.com/acwright/6502-CRT) — the same idea for cartridge ROMs
+- [6502-ASM](https://github.com/acwright/6502-ASM) — worked assembly examples
+- [cffs](https://github.com/acwright/cffs) / [bin2woz](https://github.com/acwright/bin2woz) — the tools behind `make cf` and `make woz`
+
+## License
+
+MIT License — see [LICENSE](LICENSE).

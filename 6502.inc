@@ -2,8 +2,8 @@
 ;   6502.inc — External include file for the 6502 system
 ; =============================================================================
 ;
-;   CPU:       WDC 65C02
-;   BIOS:      v1.3
+;   CPU:       WDC 65C02S
+;   BIOS:      v1.4
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
 ;   Include this file in external projects to access Kernal routines,
@@ -48,6 +48,16 @@
 ;   Otherwise a console check halts if no video/serial is found, then
 ;   the splash screen and boot menu are displayed.  ENTER launches
 ;   BASIC; ESC enters the Monitor.  A 5-second timeout auto-boots BASIC.
+;   The splash is drawn on whichever console is active — centred on the
+;   40-column screen, or left-aligned as plain text over serial.
+;
+;   GRACEFUL DEGRADATION
+;   --------------------
+;   Every Kernal routine that drives a card checks HW_PRESENT first, so
+;   a call on a machine without that card is safe rather than a crash.
+;   Routines with nothing to report back return silently (video and SID);
+;   routines that move data report failure in the carry (CompactFlash).
+;   The per-routine notes below say which behaviour each one has.
 ;
 ;   CARTRIDGE SUPPORT
 ;   -----------------
@@ -88,7 +98,7 @@
 ; =============================================================================
 ; These zero page locations are used by the Kernal.  External programs may
 ; use STR_PTR and CF_BUF_PTR/CF_LBA as parameters to Kernal calls.
-; Locations $36-$FF are free for user programs.
+; Locations $3A-$FF are free for user programs.
 
 STR_PTR             := $02               ; 2 bytes — String pointer (used by FsLoadFile, FsSaveFile, FsDeleteFile, etc.)
 CF_BUF_PTR          := $24               ; 2 bytes — CF sector data buffer pointer
@@ -97,7 +107,8 @@ XFER_PTR            := $2A               ; 2 bytes — XModem transfer data poin
 
 ; Safe zero page range for user programs:
 ; $3A-$FF (198 bytes free)
-; Note: $36-$39 are used internally by XModemLoad/XModemSave and must not be relied upon across those calls
+; Note: $2E-$35 belong to the Monitor and $36-$39 to XModemLoad/XModemSave;
+;       neither range survives a call into those routines
 
 
 ; =============================================================================
@@ -215,6 +226,7 @@ InitVideo           := $A015             ; Initialize TMS9918 (text mode, 40×24
                                          ;   Modifies: A, X, Y
 
 VideoClear          := $A018             ; Clear screen (fill with spaces), reset cursor to (0,0)
+                                         ;   Skips silently if no video card is fitted
                                          ;   Modifies: A, X, Y
 
 VideoPutChar        := $A01B             ; Write character at cursor position (no cursor advance)
@@ -222,6 +234,7 @@ VideoPutChar        := $A01B             ; Write character at cursor position (n
 
 VideoSetCursor      := $A01E             ; Set cursor position
                                          ;   In: X = column (0-39), Y = row (0-23)
+                                         ;   Skips silently if no video card is fitted
                                          ;   Modifies: A
 
 VideoGetCursor      := $A021             ; Get cursor position
@@ -233,6 +246,7 @@ VideoScroll         := $A024             ; Scroll screen up one line, clear bott
 VideoSetColor       := $A027             ; Set TMS9918 text color
                                          ;   In: A = color byte (high nibble = foreground, low nibble = background)
                                          ;   See TMS9918 Color Constants below
+                                         ;   Skips silently if no video card is fitted
                                          ;   Modifies: A
 
 VideoChroutRaw      := $A02A             ; Output char to video with no control-code handling
@@ -252,16 +266,19 @@ SidPlayNote         := $A033             ; Play note on a SID voice
                                          ;   In: A = voice (0-2), X = freq low, Y = freq high
                                          ;   Uses triangle waveform, ADSR: A=0 D=9 S=F R=8
                                          ;   Full sustain holds the note flat until gated off
+                                         ;   Skips silently if no SID is fitted
                                          ;   Modifies: A
 
 SidSilence          := $A036             ; Silence all 3 SID voices (gate off only)
                                          ;   Frequencies are left intact — the envelope release
                                          ;   rings the tone out.  Zeroing freq would freeze the
                                          ;   waveform and decay a DC offset (audible thump)
+                                         ;   Skips silently if no SID is fitted
                                          ;   Modifies: A
 
 SidSetVolume        := $A039             ; Set SID master volume
-                                         ;   In: A = volume (0-15)
+                                         ;   In: A = volume (0-15); only the low nibble is used
+                                         ;   Skips silently if no SID is fitted
                                          ;   Modifies: A
 
 ; --- Filesystem (disk-banked, 16-file directory per disk) ---
@@ -299,15 +316,31 @@ InitKB              := $A045             ; Initialize VIA for keyboard input
                                          ;   Modifies: A
 
 ; --- Joysticks ---
+;   Both ports are ACTIVE LOW — each line is pulled up through 1K and grounded
+;   by its switch — and both routines return the port read raw.  So a held
+;   button is a 0 bit and an untouched stick reads $FF:
+;
+;     Bit:  7   6   5   4   3   2   1   0
+;           R   L   D   U   Y   X   B   A
+;
+;   Test a direction with:  lda ... / and #%00010000 / beq @UpHeld
+;
+;   Neither routine checks HW_PRESENT — with no GPIO card fitted they read a
+;   floating bus and the value is meaningless.  Test HW_GPIO first if the card
+;   may be absent.  (BASIC's JOY() does this and reports $FF.)
+;
+;   Both routines SEI on entry and CLI on exit unconditionally, so calling
+;   either one from inside an interrupt-disabled section re-enables interrupts.
+
 ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
-                                         ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
+                                         ;   Out: A = bitmask (active low, see above)
                                          ;   Temporarily disables matrix keyboard encoder
-                                         ;   Modifies: A, X
+                                         ;   Modifies: A, X; enables interrupts
 
 ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
-                                         ;   Out: A = bitmask (active-low bits, active bits depend on wiring)
+                                         ;   Out: A = bitmask (active low, see above)
                                          ;   Temporarily disables PS/2 keyboard encoder
-                                         ;   Modifies: A, X
+                                         ;   Modifies: A, X; enables interrupts
 
 ; --- Serial (R65C51) ---
 InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
@@ -369,6 +402,10 @@ StWriteSector       := $A06F             ; Write one 512-byte sector
 
 StWaitReady         := $A072             ; Wait for CF to become ready (BSY=0, RDY=1)
                                          ;   Out: C=0 ready, C=1 timeout/error
+                                         ;   Returns C=1 at once if the boot probe found no CF
+                                         ;   card, rather than spinning out the full timeout.
+                                         ;   Every FS and sector routine passes through here, so
+                                         ;   an empty slot fails fast throughout the stack
                                          ;   Modifies: A, X, Y
 
 ; --- Timing ---
@@ -785,7 +822,7 @@ VC_STATUS           := $9C01             ; Read — Status register
 
 ; --- BIOS Version ---
 BIOS_VERSION_MAJOR  = 1
-BIOS_VERSION_MINOR  = 3
+BIOS_VERSION_MINOR  = 4
 
 ; --- ASCII Control Characters ---
 CHAR_BEL            = $07                ; Bell (Beep via SID)
