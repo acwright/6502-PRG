@@ -10,7 +10,7 @@ Current file: Program.asm
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02S
-000000r 2               ;   BIOS:      v1.4
+000000r 2               ;   BIOS:      v1.5
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
 000000r 2               ;   Include this file in external projects to access Kernal routines,
@@ -336,18 +336,16 @@ Current file: Program.asm
 000000r 2               ;   floating bus and the value is meaningless.  Test HW_GPIO first if the card
 000000r 2               ;   may be absent.  (BASIC's JOY() does this and reports $FF.)
 000000r 2               ;
-000000r 2               ;   Both routines SEI on entry and CLI on exit unconditionally, so calling
-000000r 2               ;   either one from inside an interrupt-disabled section re-enables interrupts.
+000000r 2               ;   Both routines release both encoders (KBDisable), read the port, then
+000000r 2               ;   re-enable them (KBEnable).  The interrupt state is left alone.
 000000r 2               
 000000r 2               ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
 000000r 2                                                        ;   Out: A = bitmask (active low, see above)
-000000r 2                                                        ;   Temporarily disables matrix keyboard encoder
-000000r 2                                                        ;   Modifies: A, X; enables interrupts
+000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
 000000r 2               ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
 000000r 2                                                        ;   Out: A = bitmask (active low, see above)
-000000r 2                                                        ;   Temporarily disables PS/2 keyboard encoder
-000000r 2                                                        ;   Modifies: A, X; enables interrupts
+000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
 000000r 2               ; --- Serial (R65C51) ---
 000000r 2               InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
@@ -480,6 +478,17 @@ Current file: Program.asm
 000000r 2               PrintDecU16         := $A096             ; Print an unsigned 16-bit value as decimal
 000000r 2                                                        ;   In : A = value low, X = value high (no leading zeros)
 000000r 2                                                        ;   Modifies: Flags, A, X, Y, FS_FILE_SIZE, FS_DIR_IDX
+000000r 2               
+000000r 2               ; --- Keyboard Encoder Control (raw GPIO port access) ---
+000000r 2               ;   Both keyboard encoders drive the VIA ports the joysticks share.  Disable
+000000r 2               ;   them to read GPIO_PORTA/GPIO_PORTB directly, then re-enable them.  The
+000000r 2               ;   ReadJoystick routines do this for you; call these only for custom reads.
+000000r 2               KBDisable           := $A099             ; Release both encoders and wait for them to let go
+000000r 2                                                        ;   Busy-waits ~200 us so the ports settle before reading
+000000r 2                                                        ;   Safe to call while the caller owns the VIA timers
+000000r 2                                                        ;   Modifies: Flags, A
+000000r 2               KBEnable            := $A09C             ; Re-enable both keyboard encoders
+000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -829,7 +838,7 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; --- BIOS Version ---
 000000r 2               BIOS_VERSION_MAJOR  = 1
-000000r 2               BIOS_VERSION_MINOR  = 4
+000000r 2               BIOS_VERSION_MINOR  = 5
 000000r 2               
 000000r 2               ; --- ASCII Control Characters ---
 000000r 2               CHAR_BEL            = $07                ; Bell (Beep via SID)

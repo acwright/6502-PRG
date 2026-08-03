@@ -3,7 +3,7 @@
 ; =============================================================================
 ;
 ;   CPU:       WDC 65C02S
-;   BIOS:      v1.4
+;   BIOS:      v1.5
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
 ;   Include this file in external projects to access Kernal routines,
@@ -329,18 +329,16 @@ InitKB              := $A045             ; Initialize VIA for keyboard input
 ;   floating bus and the value is meaningless.  Test HW_GPIO first if the card
 ;   may be absent.  (BASIC's JOY() does this and reports $FF.)
 ;
-;   Both routines SEI on entry and CLI on exit unconditionally, so calling
-;   either one from inside an interrupt-disabled section re-enables interrupts.
+;   Both routines release both encoders (KBDisable), read the port, then
+;   re-enable them (KBEnable).  The interrupt state is left alone.
 
 ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
                                          ;   Out: A = bitmask (active low, see above)
-                                         ;   Temporarily disables matrix keyboard encoder
-                                         ;   Modifies: A, X; enables interrupts
+                                         ;   Modifies: Flags, A
 
 ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
                                          ;   Out: A = bitmask (active low, see above)
-                                         ;   Temporarily disables PS/2 keyboard encoder
-                                         ;   Modifies: A, X; enables interrupts
+                                         ;   Modifies: Flags, A
 
 ; --- Serial (R65C51) ---
 InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
@@ -473,6 +471,17 @@ PrintCRLF           := $A093             ; Print CR ($0D) then LF ($0A)
 PrintDecU16         := $A096             ; Print an unsigned 16-bit value as decimal
                                          ;   In : A = value low, X = value high (no leading zeros)
                                          ;   Modifies: Flags, A, X, Y, FS_FILE_SIZE, FS_DIR_IDX
+
+; --- Keyboard Encoder Control (raw GPIO port access) ---
+;   Both keyboard encoders drive the VIA ports the joysticks share.  Disable
+;   them to read GPIO_PORTA/GPIO_PORTB directly, then re-enable them.  The
+;   ReadJoystick routines do this for you; call these only for custom reads.
+KBDisable           := $A099             ; Release both encoders and wait for them to let go
+                                         ;   Busy-waits ~200 us so the ports settle before reading
+                                         ;   Safe to call while the caller owns the VIA timers
+                                         ;   Modifies: Flags, A
+KBEnable            := $A09C             ; Re-enable both keyboard encoders
+                                         ;   Modifies: Flags, A
 
 
 ; =============================================================================
@@ -822,7 +831,7 @@ VC_STATUS           := $9C01             ; Read — Status register
 
 ; --- BIOS Version ---
 BIOS_VERSION_MAJOR  = 1
-BIOS_VERSION_MINOR  = 4
+BIOS_VERSION_MINOR  = 5
 
 ; --- ASCII Control Characters ---
 CHAR_BEL            = $07                ; Bell (Beep via SID)
