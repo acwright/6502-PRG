@@ -1,4 +1,4 @@
-ca65 V2.19 - Git 0fca83500
+ca65 V2.19 - Git 547d92358
 Main file   : Program.asm
 Current file: Program.asm
 
@@ -21,11 +21,15 @@ Current file: Program.asm
 000000r 2               ;   $0000-$0003   Zero Page: System pointers (see below)
 000000r 2               ;   $0004-$0023   Zero Page: Reserved by BASIC interpreter
 000000r 2               ;   $0024-$0039   Zero Page: System scratch (CF, serial, delay, monitor, XModem)
-000000r 2               ;   $003A-$00FF   Zero Page: Free for user programs
+000000r 2               ;   $003A-$00FF   Zero Page: Free for a program that has taken the machine over
+000000r 2               ;                 (not underneath a running BASIC, which uses it as it interprets)
 000000r 2               ;   $0100-$01FF   CPU Stack
 000000r 2               ;   $0200-$02FF   Input Buffer (ring buffer, managed by Kernal)
 000000r 2               ;   $0300-$03FF   Kernal Variables (vectors, cursor, HW flags, etc.)
-000000r 2               ;   $0400-$05FF   User Variables / BASIC workspace
+000000r 2               ;   $0400-$04FF   BAS_LINBUF: BASIC's raw input line (NOT user memory, despite
+000000r 2               ;                 BIOS.inc naming $0400 USER_VARS -- a legacy name kept only
+000000r 2               ;                 because Wozmon builds its input buffer there)
+000000r 2               ;   $0500-$05FF   BAS_TOKBUF: BASIC's tokenizing scratch
 000000r 2               ;   $0600-$07FF   FS sector buffer (clobbered by any FS/St routine call)
 000000r 2               ;   $0800-$7FFF   Program RAM (30 KB — load address for user code)
 000000r 2               ;   $8000-$83FF   IO 1: Banked RAM Low  (256 × ~1 KB banks)

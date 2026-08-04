@@ -14,11 +14,15 @@
 ;   $0000-$0003   Zero Page: System pointers (see below)
 ;   $0004-$0023   Zero Page: Reserved by BASIC interpreter
 ;   $0024-$0039   Zero Page: System scratch (CF, serial, delay, monitor, XModem)
-;   $003A-$00FF   Zero Page: Free for user programs
+;   $003A-$00FF   Zero Page: Free for a program that has taken the machine over
+;                 (not underneath a running BASIC, which uses it as it interprets)
 ;   $0100-$01FF   CPU Stack
 ;   $0200-$02FF   Input Buffer (ring buffer, managed by Kernal)
 ;   $0300-$03FF   Kernal Variables (vectors, cursor, HW flags, etc.)
-;   $0400-$05FF   User Variables / BASIC workspace
+;   $0400-$04FF   BAS_LINBUF: BASIC's raw input line (NOT user memory, despite
+;                 BIOS.inc naming $0400 USER_VARS -- a legacy name kept only
+;                 because Wozmon builds its input buffer there)
+;   $0500-$05FF   BAS_TOKBUF: BASIC's tokenizing scratch
 ;   $0600-$07FF   FS sector buffer (clobbered by any FS/St routine call)
 ;   $0800-$7FFF   Program RAM (30 KB — load address for user code)
 ;   $8000-$83FF   IO 1: Banked RAM Low  (256 × ~1 KB banks)

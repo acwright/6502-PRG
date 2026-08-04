@@ -2,7 +2,7 @@ TARGET = Program
 EIGHTTHREE = PROGRAM
 CONFIG = 6502
 
-.PHONY: all clean
+.PHONY: all build view run woz cf clean
 
 all: build woz cf
 
@@ -24,7 +24,4 @@ cf:
 	cffs add $(TARGET).img $(EIGHTTHREE).PRG
 
 clean:
-	rm $(TARGET).prg
-	rm $(TARGET).woz
-	rm $(TARGET).lst
-	rm $(TARGET).img
+	rm -f $(TARGET).prg $(TARGET).woz $(TARGET).lst $(TARGET).img $(EIGHTTHREE).PRG

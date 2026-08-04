@@ -3,6 +3,9 @@
 
 A 6502 assembly language program template for the [A.C. Wright 6502](https://github.com/acwright/6502-ACE) family of computer systems.
 
+> 📖 **Guide:** [AC6502 Documentation](https://acwright.github.io/6502-DOCS/) — the user's and programmer's guide for the whole family.
+> This template is walked through end to end in [Starting from a template](https://acwright.github.io/6502-DOCS/crossdev/templates).
+
 ## Overview
 
 Programs for this system are loaded into RAM at `$0800` and executed from BASIC. Unlike cartridges (which replace ROM), programs run entirely in RAM alongside the BIOS, Kernal, BASIC interpreter, and Monitor — all of which remain available.
@@ -207,6 +210,7 @@ three loaders had this problem.
 - [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run a program without hardware (`make run`)
 - [6502-CRT](https://github.com/acwright/6502-CRT) — the same idea for cartridge ROMs
 - [6502-ASM](https://github.com/acwright/6502-ASM) — worked assembly examples
+- [6502-DOCS](https://github.com/acwright/6502-DOCS) — the documentation site: the cross-development and assembly guides, and the printable reference cards
 - [cffs](https://github.com/acwright/cffs) / [bin2woz](https://github.com/acwright/bin2woz) — the tools behind `make cf` and `make woz`
 
 ## License
