@@ -20,8 +20,11 @@ woz:
 
 cf:
 	cffs create $(TARGET).img --size 1M
-	cp -f $(TARGET).prg $(EIGHTTHREE).PRG || true
-	cffs add $(TARGET).img $(EIGHTTHREE).PRG
+	mkdir -p .cf
+	cp -f $(TARGET).prg .cf/$(EIGHTTHREE).PRG
+	cffs add $(TARGET).img .cf/$(EIGHTTHREE).PRG
+	rm -rf .cf
 
 clean:
-	rm -f $(TARGET).prg $(TARGET).woz $(TARGET).lst $(TARGET).img $(EIGHTTHREE).PRG
+	rm -rf .cf
+	rm -f $(TARGET).prg $(TARGET).woz $(TARGET).lst $(TARGET).img
