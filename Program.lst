@@ -10,7 +10,7 @@ Current file: Program.asm
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02S
-000000r 2               ;   BIOS:      v1.5
+000000r 2               ;   BIOS:      v1.6
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
 000000r 2               ;   Include this file in external projects to access Kernal routines,
@@ -67,7 +67,9 @@ Current file: Program.asm
 000000r 2               ;   Every Kernal routine that drives a card checks HW_PRESENT first, so
 000000r 2               ;   a call on a machine without that card is safe rather than a crash.
 000000r 2               ;   Routines with nothing to report back return silently (video and SID);
-000000r 2               ;   routines that move data report failure in the carry (CompactFlash).
+000000r 2               ;   routines that move data report failure in the carry (CompactFlash, and
+000000r 2               ;   the NVRAM save slots).  The raw NVRAM pair RtcReadNVRAM / RtcWriteNVRAM
+000000r 2               ;   is the exception: it does not check, so test HW_RTC before calling it.
 000000r 2               ;   The per-routine notes below say which behaviour each one has.
 000000r 2               ;
 000000r 2               ;   CARTRIDGE SUPPORT
@@ -115,6 +117,7 @@ Current file: Program.asm
 000000r 2               CF_BUF_PTR          := $24               ; 2 bytes — CF sector data buffer pointer
 000000r 2               CF_LBA              := $26               ; 4 bytes — CF 28-bit LBA address (little-endian)
 000000r 2               XFER_PTR            := $2A               ; 2 bytes — XModem transfer data pointer (source for XModemSave, dest for XModemLoad)
+000000r 2               NV_PTR              := STR_PTR           ; 2 bytes — Caller's buffer during an NvRead / NvWrite copy (clobbered by both)
 000000r 2               
 000000r 2               ; Safe zero page range for user programs:
 000000r 2               ; $3A-$FF (198 bytes free)
@@ -178,6 +181,9 @@ Current file: Program.asm
 000000r 2                                                        ;   A loader that drops a .prg at $0800 and then hands
 000000r 2                                                        ;   off to BASIC should write the end address here so
 000000r 2                                                        ;   the attached machine code survives LOAD/SAVE.
+000000r 2               
+000000r 2               ; NVRAM save slots (v1.6):
+000000r 2               NV_ID               := $0390             ; 1 byte  — Owner ID input for NvWrite ($01-$FF; $00 is refused — that is NvErase)
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -494,6 +500,56 @@ Current file: Program.asm
 000000r 2               KBEnable            := $A09C             ; Re-enable both keyboard encoders
 000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
+000000r 2               ; --- NVRAM Save Slots (DS1511Y) (v1.6) ---
+000000r 2               ;   The 256 NVRAM bytes as 16 slots.  Slot n is NVRAM n*16 .. n*16+15:
+000000r 2               ;     +$0      owner ID ($00 = free, otherwise a byte the game chooses)
+000000r 2               ;     +$1      checksum over the owner ID and the 14 payload bytes
+000000r 2               ;     +$2-$F   payload (NV_SLOT_DATA bytes)
+000000r 2               ;   Checksum: ck = NV_CK_SEED, then ck = rol8(ck) EOR b for each covered byte
+000000r 2               ;   (rol8 = shift left, bit 7 back into bit 0).  Each slot is validated alone.
+000000r 2               ;
+000000r 2               ;   All six:
+000000r 2               ;     * Carry set means the call did nothing: no RTC fitted, slot >= NV_SLOTS,
+000000r 2               ;       or the per-routine cases noted.  They check HW_PRESENT themselves.
+000000r 2               ;     * The caller's D and I flags come back unchanged.  Interrupts are held
+000000r 2               ;       off for a slot copy, which uses the DS1511Y's burst mode (every access
+000000r 2               ;       of RTC_RAM_DATA advances RTC_RAM_ADDR); an NMI handler must not touch
+000000r 2               ;       NVRAM.  Burst mode is off again on return.
+000000r 2               ;     * On an older BIOS these are reserved slots: a bare RTS that leaves the
+000000r 2               ;       carry as the caller had it.  Check KernalVersion for 1.6 or later.
+000000r 2               NvStat              := $A09F             ; Report a slot's state
+000000r 2                                                        ;   In:  X = slot (0-15)
+000000r 2                                                        ;   Out: A = NV_EMPTY / NV_VALID / NV_BAD, Y = owner ID
+000000r 2                                                        ;        C set if no RTC or bad slot (A, Y undefined)
+000000r 2                                                        ;   Modifies: Flags, A, Y (X preserved)
+000000r 2               
+000000r 2               NvRead              := $A0A2             ; Copy a valid slot's 14 payload bytes
+000000r 2                                                        ;   In:  X = slot, A/Y = destination lo/hi
+000000r 2                                                        ;   Out: A = status, Y = owner ID
+000000r 2                                                        ;        C clear and the buffer written only if A = NV_VALID
+000000r 2                                                        ;        C set on a slot that is not valid (A, Y still the
+000000r 2                                                        ;        status and owner) — the buffer is never touched
+000000r 2                                                        ;   Modifies: Flags, A, Y, NV_PTR (X preserved)
+000000r 2               
+000000r 2               NvWrite             := $A0A5             ; Write a slot: owner ID, checksum and 14 payload bytes
+000000r 2                                                        ;   In:  X = slot, A/Y = source lo/hi, NV_ID = owner ID ($01-$FF)
+000000r 2                                                        ;   Out: C set if no RTC, bad slot or NV_ID = 0 (nothing written)
+000000r 2                                                        ;   Modifies: Flags, A, Y, NV_PTR (X preserved)
+000000r 2               
+000000r 2               NvErase             := $A0A8             ; Zero all 16 bytes of a slot
+000000r 2                                                        ;   In:  X = slot
+000000r 2                                                        ;   Out: C set if no RTC or bad slot
+000000r 2                                                        ;   Modifies: Flags, A, Y (X preserved)
+000000r 2               
+000000r 2               NvFind              := $A0AB             ; Lowest slot whose owner ID is A, valid or damaged
+000000r 2                                                        ;   In:  A = owner ID ($00 finds the lowest free slot)
+000000r 2                                                        ;   Out: X = slot; C set if no slot matched (X undefined)
+000000r 2                                                        ;   Modifies: Flags, A, X
+000000r 2               
+000000r 2               NvFormat            := $A0AE             ; Erase all 16 slots
+000000r 2                                                        ;   Out: C set if no RTC
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
 000000r 2               ;   SECTION 5: IO HARDWARE REGISTERS
@@ -528,7 +584,8 @@ Current file: Program.asm
 000000r 2               RTC_RAM_ADDR        := $8810             ; NVRAM address register
 000000r 2               RTC_RAM_DATA        := $8813             ; NVRAM data register
 000000r 2               ; Control Register B bits:
-000000r 2               RTC_CTRL_B_TE       := %10000000         ; Transfer Enable — set to inhibit clock updates during write
+000000r 2               RTC_CTRL_B_TE       := %10000000         ; Transfer Enable — 1 = counters update the user registers once a second, 0 = inhibited
+000000r 2               RTC_CTRL_B_BME      := %00100000         ; Burst Mode Enable — 1 = RTC_RAM_ADDR auto-increments on each access of RTC_RAM_DATA
 000000r 2               ; Month register ($8805) — the upper 3 bits are oscillator/SQW control, not month data.
 000000r 2               ; Always mask with RTC_MON_MASK when reading the month, and preserve these bits on write.
 000000r 2               RTC_MON_MASK        := %00011111         ; Month value occupies the low 5 bits
@@ -848,7 +905,16 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; --- BIOS Version ---
 000000r 2               BIOS_VERSION_MAJOR  = 1
-000000r 2               BIOS_VERSION_MINOR  = 5
+000000r 2               BIOS_VERSION_MINOR  = 6
+000000r 2               
+000000r 2               ; --- NVRAM Save Slots (v1.6) ---
+000000r 2               NV_SLOTS            = 16                 ; Save slots in RTC NVRAM
+000000r 2               NV_SLOT_SIZE        = 16                 ; Bytes per slot (slot n at NVRAM n*16)
+000000r 2               NV_SLOT_DATA        = 14                 ; Payload bytes per slot
+000000r 2               NV_CK_SEED          = $A6                ; Checksum seed
+000000r 2               NV_EMPTY            = 0                  ; NvStat: slot is free
+000000r 2               NV_VALID            = 1                  ; NvStat: owner ID set, checksum agrees
+000000r 2               NV_BAD              = 2                  ; NvStat: owner ID set, checksum does not
 000000r 2               
 000000r 2               ; --- ASCII Control Characters ---
 000000r 2               CHAR_BEL            = $07                ; Bell (Beep via SID)
