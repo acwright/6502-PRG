@@ -28,3 +28,8 @@
 # OS files
 .DS_Store
 Thumbs.db
+
+# Planning documents are kept local
+VDP-ASSESSMENT.md
+VDP-PLAN.md
+/PLAN.md
