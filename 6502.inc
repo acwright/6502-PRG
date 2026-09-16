@@ -607,6 +607,12 @@ SC_STATUS_OVR       := %00000100         ; Overrun error
 SC_STATUS_FRME      := %00000010         ; Framing error
 SC_STATUS_PARE      := %00000001         ; Parity error
 
+; Serial Command Register bits:
+SC_CMD_RXIRQ_OFF    := %00000010         ; Receiver interrupt disabled (set = off)
+                                         ;   Set it before polling SC_DATA yourself,
+                                         ;   as XModem does; while it is clear, Chrout
+                                         ;   moves a received byte into the input buffer
+
 ; --- GPIO / Input Board (65C22 VIA) (IO 6: $9400-$940F) ---
 ;   Port B = matrix keyboard / joystick 1
 ;   Port A = PS/2 keyboard / joystick 2
