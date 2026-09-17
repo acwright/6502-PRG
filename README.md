@@ -1,14 +1,16 @@
 6502-PRG
 ========
 
-A 6502 assembly language program template for the [A.C. Wright 6502](https://github.com/acwright/6502-ACE) family of computer systems.
+A 6502 assembly language program template for the [AC6502](https://github.com/acwright/6502-ACE) family of computer systems.
 
 > 📖 **Guide:** [AC6502 Documentation](https://acwright.github.io/6502-DOCS/) — the user's and programmer's guide for the whole family.
 > This template is walked through end to end in [Starting from a template](https://acwright.github.io/6502-DOCS/crossdev/templates).
 
 ## Overview
 
-Programs for this system are loaded into RAM at `$0800` and executed from BASIC. Unlike cartridges (which replace ROM), programs run entirely in RAM alongside the BIOS, Kernal, BASIC interpreter, and Monitor — all of which remain available.
+Programs for this system are loaded into RAM at `$0800` and executed from BASIC. Unlike cartridges (which replace ROM), programs run entirely in RAM alongside the BIOS — the Kernal, the BASIC interpreter, Wozmon and, on BIOS 1.x, the Monitor — all of which remain available.
+
+The template builds two ways from the same source: `make` for any ACE on BIOS 1.x with a TMS9918A, and `make VDP=1` for an ACE converted to a [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) on BIOS 2.x. See [Building for the 6502-PICOVDP](#building-for-the-6502-picovdp).
 
 ### How It Works
 
@@ -22,12 +24,12 @@ Programs for this system are loaded into RAM at `$0800` and executed from BASIC.
 
 | Range | Contents |
 |-------|----------|
-| `$0000–$0039` | Zero page — system pointers, Monitor and XModem scratch (see `6502.inc` for details) |
+| `$0000–$0039` | Zero page — system pointers, BASIC, and Kernal scratch (see `6502.inc` for details) |
 | `$003A–$00FF` | Zero page — **free for user programs** (198 bytes) |
 | `$0100–$01FF` | CPU stack |
 | `$0200–$02FF` | Input ring buffer (managed by Kernal) |
 | `$0300–$03FF` | Kernal variables (vectors, cursor, HW flags, etc.) |
-| `$0400–$05FF` | User/BASIC variables |
+| `$0400–$05FF` | BASIC's input line and tokenizing buffers |
 | `$0600–$07FF` | CompactFlash sector buffer — clobbered by any filesystem call |
 | `$0800–$080B` | **BASIC startup stub** (`10 SYS 2060`) |
 | `$080C–$7FFF` | **Your program code and data** (~30 KB available) |
@@ -66,12 +68,12 @@ The system is already fully initialized when your program runs. Key entry points
 | `$A018` | `VideoClear` | Clear screen and reset cursor |
 | `$A01B` | `VideoPutChar` | Write character at cursor position |
 | `$A01E` | `VideoSetCursor` | Set cursor position (X=col, Y=row) |
-| `$A027` | `VideoSetColor` | Set text color (A = fg<<4 \| bg) |
+| `$A027` | `VideoSetColor` | Set text color (A = fg<<4 \| bg); on BIOS 2.x the pen for text printed from then on, and the border |
 | `$A033` | `SidPlayNote` | Play note (A=voice, X=freqLo, Y=freqHi) |
 | `$A075` | `SysDelay` | Delay A=lo, X=hi centiseconds |
 | `$A048` | `ReadJoystick1` | Read joystick 1 bitmask |
 
-See `6502.inc` for the complete jump table with calling conventions.
+See `6502.inc` for the complete jump table with calling conventions. On BIOS 2.x the jump table grew by thirteen PICOVDP entries (`VdpInfo` through `VdpStatus`, `$A0B1–$A0D5`): see Section 4 of `6502-VDP.inc`.
 
 ### Hardware Detection
 
@@ -84,6 +86,28 @@ beq @NoSound           ; Skip sound code if not
 jsr SidPlayNote
 @NoSound:
 ```
+
+## Building for the 6502-PICOVDP
+
+`make VDP=1` builds `Program-VDP.prg` with `6502-VDP.inc` instead of `6502.inc`. `Program.asm` picks the include with the `VDP` symbol, which the Makefile passes to ca65:
+
+```asm
+.ifdef VDP
+.include "6502-VDP.inc"
+.else
+.include "6502.inc"
+.endif
+```
+
+Start from `6502-VDP.inc` when the program needs anything BIOS 2.x adds: the PICOVDP's modes, layers, palette and sprites (`VC_*` register names), or the Kernal's VDP entries. A program built that way needs an ACE converted to a 6502-PICOVDP, running BIOS 2.0 or later, and **does not run on a TMS9918A**. Its build checks `KernalVersion` at `Start` and, on BIOS 1.x, prints `NEEDS BIOS 2 AND A 6502-PICOVDP` and returns to BASIC.
+
+A program built with `6502.inc` that only calls the jump table needs no VDP build: it runs on 2.x as it is.
+
+What is different on BIOS 2.x:
+
+- **There is no Monitor.** Load with `LOAD` (see [Loading & Running](#loading--running)); `SYS` passes registers, and a `BRK` prints the registers and returns to BASIC.
+- **The font is in the card.** A program that overwrote the pattern table or changed modes gets the text console back with `InitVideo`, which returns after the next vertical blank. BASIC also restores the console when a program that changed modes stops.
+- **`VideoSetColor` sets the pen**, the colour of text printed from then on, and the border follows the background.
 
 ## Building
 
@@ -123,11 +147,12 @@ Installed via the [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) app
 | Command | Description |
 |---------|-------------|
 | `make` | Build all targets (`.prg`, `.woz`, and CF image) |
+| `make VDP=1` | Build all targets for the 6502-PICOVDP / BIOS 2.x (`Program-VDP.*`) |
 | `make build` | Assemble only (`Program.prg`) |
 | `make view` | Display hexdump of the built program |
 | `make woz` | Create Wozmon-compatible file (`Program.woz`) |
 | `make cf` | Create CompactFlash disk image with the program |
-| `make run` | Launch the emulator app with the built program loaded |
+| `make run` | Launch the emulator app with the built program loaded (`make VDP=1 run` selects the PICOVDP card; add `ROM=path/to/BIOS.bin` to boot a local BIOS image) |
 | `make clean` | Remove build artifacts |
 
 ### Build Output
@@ -142,9 +167,11 @@ Produces:
 - `Program.lst` — Assembly listing file for debugging
 - `Program.img` — CompactFlash disk image with the program
 
+`make VDP=1` writes the same four files named `Program-VDP.*`. The file inside `Program-VDP.img` is still `PROGRAM.PRG`.
+
 ### Loading & Running
 
-Use BASIC's `LOAD`. Requires BIOS v1.3 or later.
+Use BASIC's `LOAD`. Requires BIOS v1.3 or later; the VDP build requires BIOS v2.0 or later.
 
 **From CompactFlash** — the usual case:
 ```
@@ -162,7 +189,8 @@ which is harmless.
 
 Either way, `RUN` executes the stub and `SYS 2060` enters your code at `$080C`.
 
-**From the Monitor**, if you are already there:
+**From the Monitor** (BIOS 1.x only; 2.x has no Monitor), if you are already
+there:
 ```
 L "PROGRAM.PRG"
 X
@@ -177,11 +205,13 @@ would otherwise put its variables. Keeping the two apart depends on the loader
 telling BASIC how many bytes it wrote, so BASIC can place `VARTAB` past the whole
 image rather than at the end of the tokenized line chain.
 
-`LOAD` and the Monitor's `L` both do this as of BIOS v1.3. **Wozmon does not** —
+`LOAD` and the 1.x Monitor's `L` both do this as of BIOS v1.3, and `LOAD`
+still does on 2.x. **Wozmon does not** —
 it writes bytes one at a time with no notion of a length, so BASIC falls back to
 walking the line chain, `VARTAB` lands at `$080C` on top of your code, and the
 first variable assignment destroys it. Use Wozmon for code you will enter from
-the Monitor, not for programs you intend to `RUN`.
+Wozmon itself (or, on 1.x, from the Monitor), not for programs you intend to
+`RUN`.
 
 On BIOS versions before v1.3 the byte count was discarded on every path, so all
 three loaders had this problem.
@@ -191,7 +221,8 @@ three loaders had this problem.
 | File | Purpose |
 |------|---------|
 | `Program.asm` | Main source — BASIC stub, entry point, example code |
-| `6502.inc` | System include file — Kernal jump table, hardware registers, constants |
+| `6502.inc` | System include file for BIOS 1.x and the TMS9918A — Kernal jump table, hardware registers, constants |
+| `6502-VDP.inc` | System include file for BIOS 2.x and the 6502-PICOVDP (identical to 6502-ASM's) |
 | `6502.cfg` | Linker configuration — memory layout for RAM programs |
 | `Makefile` | Build system |
 
@@ -206,7 +237,8 @@ three loaders had this problem.
 ## Related
 
 - [6502-ACE](https://github.com/acwright/6502-ACE) — the hardware, and the index of the whole family
-- [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind the Kernal jump table; `6502.inc` here tracks its published API
+- [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind the Kernal jump table: `6502.inc` is its 1.6 API, `6502-VDP.inc` its 2.x API
+- [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) — the video card `6502-VDP.inc` is for
 - [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run a program without hardware (`make run`)
 - [6502-CRT](https://github.com/acwright/6502-CRT) — the same idea for cartridge ROMs
 - [6502-ASM](https://github.com/acwright/6502-ASM) — worked assembly examples
