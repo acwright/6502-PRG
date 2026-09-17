@@ -106,7 +106,7 @@ A program built with `6502.inc` that only calls the jump table needs no VDP buil
 What is different on BIOS 2.x:
 
 - **There is no Monitor.** Load with `LOAD` (see [Loading & Running](#loading--running)); `SYS` passes registers, and a `BRK` prints the registers and returns to BASIC.
-- **The font is in the card.** A program that overwrote the pattern table or changed modes gets the text console back with `InitVideo`, which returns after the next vertical blank. BASIC also restores the console when a program that changed modes stops.
+- **The font is in the card.** A program that overwrote the pattern table or changed modes gets the text console back with `InitVideo`, which returns after the next vertical blank. BASIC also restores it when a program stops, if the mode was changed through the Kernal's VDP entries (which keep `VID_MODE`); a program that writes the registers itself calls `InitVideo` before it returns.
 - **`VideoSetColor` sets the pen**, the colour of text printed from then on, and the border follows the background.
 
 ## Building
