@@ -8,29 +8,54 @@ Current file: Program.asm
 000000r 1               ; the default builds for the TMS9918A on BIOS 1.x.
 000000r 1               .ifdef VDP
 000000r 1               .include "6502-VDP.inc"
-000000r 1               .else
-000000r 1               .include "6502.inc"
 000000r 2               ; =============================================================================
-000000r 2               ;   6502.inc — External include file for the 6502 system
+000000r 2               ;   6502-VDP.inc — the AC6502 ACE with a 6502-PICOVDP
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02S
-000000r 2               ;   BIOS:      v1.6
+000000r 2               ;   Video:     6502-PICOVDP (SPEC draft 0.5)
+000000r 2               ;   BIOS:      v2.0
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
-000000r 2               ;   Include this file in external projects to access Kernal routines,
-000000r 2               ;   IO hardware registers, system variables, and useful constants.
+000000r 2               ;   Include this file in programs for an ACE whose video card is a
+000000r 2               ;   6502-PICOVDP, running BIOS 2.x, to access Kernal routines, IO hardware
+000000r 2               ;   registers, system variables, and useful constants.  It names the
+000000r 2               ;   PICOVDP's second port pair, its registers, status registers and bit
+000000r 2               ;   fields as VC_* equates.
+000000r 2               ;
+000000r 2               ;   An ACE with a TMS9918A uses 6502.inc instead.  A program built with this
+000000r 2               ;   file assembles and links for either machine but only runs on this one.
+000000r 2               ;   To build one source both ways, select the include with ca65's VDP symbol
+000000r 2               ;   (make VDP=1 passes --asm-define VDP):
+000000r 2               ;
+000000r 2               ;     .ifdef VDP
+000000r 2               ;     .include "../6502-VDP.inc"
+000000r 2               ;     .else
+000000r 2               ;     .include "../6502.inc"
+000000r 2               ;     .endif
+000000r 2               ;
+000000r 2               ;   Do not include both: every shared name would be defined twice.
+000000r 2               ;
+000000r 2               ;   NAMES
+000000r 2               ;   -----
+000000r 2               ;   A name for something the 6502-PICOVDP SPEC defines (a register, a bit
+000000r 2               ;   field, a capability bit, a font ID, a status value) is VC_*, as in
+000000r 2               ;   VC_REG_FONT and VC_CAP_FONT.  A name for something the BIOS defines (a
+000000r 2               ;   Kernal entry, a RAM variable, an HW_* flag) is BIOS.inc's own, as in
+000000r 2               ;   VdpLoadFont and VDP_CAPS.  BIOS.inc's VDP_* names for SPEC values are
+000000r 2               ;   internal to the BIOS and are not repeated here, so VDP_* in this file is
+000000r 2               ;   only ever a Kernal RAM variable.  tools/check-include.py enforces that.
 000000r 2               ;
 000000r 2               ;   MEMORY MAP
 000000r 2               ;   ----------
 000000r 2               ;   $0000-$0003   Zero Page: System pointers (see below)
 000000r 2               ;   $0004-$0023   Zero Page: Reserved by BASIC interpreter
-000000r 2               ;   $0024-$0039   Zero Page: System scratch (CF, serial, delay, monitor, XModem)
+000000r 2               ;   $0024-$0039   Zero Page: System scratch (CF, serial, delay, XModem)
 000000r 2               ;   $003A-$00FF   Zero Page: Free for a program that has taken the machine over
 000000r 2               ;                 (not underneath a running BASIC, which uses it as it interprets)
 000000r 2               ;   $0100-$01FF   CPU Stack
 000000r 2               ;   $0200-$02FF   Input Buffer (ring buffer, managed by Kernal)
-000000r 2               ;   $0300-$03FF   Kernal Variables (vectors, cursor, HW flags, etc.)
+000000r 2               ;   $0300-$03FF   Kernal Variables (vectors, cursor, HW flags, video, etc.)
 000000r 2               ;   $0400-$04FF   BAS_LINBUF: BASIC's raw input line (NOT user memory, despite
 000000r 2               ;                 BIOS.inc naming $0400 USER_VARS -- a legacy name kept only
 000000r 2               ;                 because Wozmon builds its input buffer there)
@@ -44,14 +69,15 @@ Current file: Program.asm
 000000r 2               ;   $9000-$9003   IO 5: Serial (R65C51 ACIA)
 000000r 2               ;   $9400-$940F   IO 6: GPIO (65C22 VIA — keyboard & joysticks)
 000000r 2               ;   $9800-$981C   IO 7: Sound (SID / ARMSID)
-000000r 2               ;   $9C00-$9C01   IO 8: Video (TMS9918 / pico9918)
+000000r 2               ;   $9C00-$9C03   IO 8: Video (6502-PICOVDP, two port pairs)
 000000r 2               ;   $A000-$A0FF   Kernal Jump Table (stable entry points)
-000000r 2               ;   $A100-$B7FF   Kernal Implementation
-000000r 2               ;   $B800-$BFFF   Character Set ROM (2 KB, 256 × 8-byte patterns)
-000000r 2               ;   $C000-$EDFF   BASIC Interpreter
-000000r 2               ;   $EE00-$FEFF   Machine Code Monitor
-000000r 2               ;   $FF00-$FFF9   Wozmon (mini monitor)
+000000r 2               ;   $A100-$BFFF   Kernal Implementation
+000000r 2               ;   $C000-$FEFF   BASIC Interpreter
+000000r 2               ;   $FF00-$FFF9   Wozmon (mini monitor; SYS 65280 from BASIC)
 000000r 2               ;   $FFFA-$FFFF   CPU Vectors (NMI, RESET, IRQ)
+000000r 2               ;
+000000r 2               ;   There is no machine-code Monitor and no character set in ROM on 2.x.
+000000r 2               ;   The text font is the card's own (font $00), loaded by InitVideo.
 000000r 2               ;
 000000r 2               ;   BOOT SEQUENCE
 000000r 2               ;   -------------
@@ -61,34 +87,68 @@ Current file: Program.asm
 000000r 2               ;   own display hardware can still boot).  A startup beep plays (if SID
 000000r 2               ;   is present) for audible feedback, then BOOT_VECTOR ($035B) is
 000000r 2               ;   checked — if non-zero, execution jumps there (cartridge takeover).
-000000r 2               ;   Otherwise a console check halts if no video/serial is found, then
-000000r 2               ;   the splash screen and boot menu are displayed.  ENTER launches
-000000r 2               ;   BASIC; ESC enters the Monitor.  A 5-second timeout auto-boots BASIC.
-000000r 2               ;   The splash is drawn on whichever console is active — centred on the
-000000r 2               ;   40-column screen, or left-aligned as plain text over serial.
+000000r 2               ;   Otherwise a console check halts if no video/serial is found, and the
+000000r 2               ;   machine goes straight to BASIC, which prints its header:
+000000r 2               ;     AC6502 BIOS v2.0
+000000r 2               ;     BASIC v2.0 NNNNN BYTES FREE
+000000r 2               ;   On video the header is the console's first use, which brings the Text
+000000r 2               ;   console up (see VIDEO CONSOLE).
+000000r 2               ;
+000000r 2               ;   VIDEO CONSOLE
+000000r 2               ;   -------------
+000000r 2               ;   The probe sets HW_VID only for a 6502-PICOVDP (STAT4 = VC_ID) whose STAT6
+000000r 2               ;   has VC_CAP_FONT set; it records STAT5 in VDP_FW and STAT6 in VDP_CAPS.
+000000r 2               ;   STAT5 gates nothing.  KernalInit leaves the card as its own reset does:
+000000r 2               ;   the legacy submode (VMODE $0), unscrolled.  The first Chrout,
+000000r 2               ;   VideoClear, VideoSetCursor, VideoGetCursor or VideoSetColor brings up the
+000000r 2               ;   40×24 Text console (InitVideo, then a clear).  So a cartridge written for
+000000r 2               ;   1.x runs unchanged: one that programs M1/M2/M3 and its tables finds the
+000000r 2               ;   card as a TMS9918 was left, and one that prints gets the Text console.
+000000r 2               ;   A program never needs to check STAT4 or switch modes to print.
+000000r 2               ;
+000000r 2               ;   Every character is written with an attribute byte, fg<<4 | bg, from the
+000000r 2               ;   pen VID_PEN.  The console scrolls in hardware (L0SCRY = VID_TOP × 8).
+000000r 2               ;   The Kernal drives the card through port A only, and every entry assumes
+000000r 2               ;   and leaves VBANK = 0 and VINC = +1.
+000000r 2               ;
+000000r 2               ;   PORT B FOR INTERRUPT HANDLERS
+000000r 2               ;   -----------------------------
+000000r 2               ;   The Kernal never touches port B ($9C02/$9C03), so an interrupt handler
+000000r 2               ;   that uses it cannot land between the two writes of a foreground command,
+000000r 2               ;   and needs no sei/cli around foreground VDP work.  A handler acknowledges
+000000r 2               ;   through STAT1 (VC_REG_STATSEL_B = VC_STAT1), which clears the interrupt
+000000r 2               ;   latches and leaves STAT0's flags for foreground code.  A handler that
+000000r 2               ;   writes VBANK or VINC puts them back: both ports share them.  InitVideo
+000000r 2               ;   writes IRQEN = 0, so re-enable the interrupt after anything that calls
+000000r 2               ;   it (the console's first use, BASIC's SCREEN 0 or return to text).
 000000r 2               ;
 000000r 2               ;   GRACEFUL DEGRADATION
 000000r 2               ;   --------------------
 000000r 2               ;   Every Kernal routine that drives a card checks HW_PRESENT first, so
 000000r 2               ;   a call on a machine without that card is safe rather than a crash.
-000000r 2               ;   Routines with nothing to report back return silently (video and SID);
-000000r 2               ;   routines that move data report failure in the carry (CompactFlash, and
-000000r 2               ;   the NVRAM save slots).  The raw NVRAM pair RtcReadNVRAM / RtcWriteNVRAM
-000000r 2               ;   is the exception: it does not check, so test HW_RTC before calling it.
+000000r 2               ;   Routines with nothing to report back return silently (video console and
+000000r 2               ;   SID); routines that move data report failure in the carry (CompactFlash,
+000000r 2               ;   the NVRAM save slots, and the PICOVDP entries VdpInfo-VdpStatus, which
+000000r 2               ;   write nothing with no card; WaitVBlank waits 2 cs instead).  An empty
+000000r 2               ;   slot, a TMS9918A, and a PICOVDP without the built-in font all count as
+000000r 2               ;   no card.  The raw NVRAM pair RtcReadNVRAM / RtcWriteNVRAM is the
+000000r 2               ;   exception: it does not check, so test HW_RTC before calling it.
 000000r 2               ;   The per-routine notes below say which behaviour each one has.
 000000r 2               ;
 000000r 2               ;   CARTRIDGE SUPPORT
 000000r 2               ;   -----------------
-000000r 2               ;   Cartridges overlay $C000-$FFFF (BASIC, Monitor, Wozmon, vectors).
-000000r 2               ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) remain
-000000r 2               ;   accessible.  Use KernalInit ($A078) to initialize all hardware and
-000000r 2               ;   return via RTS — interrupts are left disabled so the cart can set
-000000r 2               ;   up its own handlers first.  See usage patterns in the BIOS README.
+000000r 2               ;   Cartridges overlay $C000-$FFFF (BASIC, Wozmon, vectors).  The Kernal
+000000r 2               ;   ($A000-$BFFF, all of it on 2.x) remains accessible.  Use KernalInit
+000000r 2               ;   ($A078) to initialize all hardware and return via RTS — interrupts are
+000000r 2               ;   left disabled so the cart can set up its own handlers first.  BRK_PTR
+000000r 2               ;   points at the Kernal's BRK report, which warm-starts BASIC at $C000; a
+000000r 2               ;   cartridge must point it at its own handler.  See usage patterns in the
+000000r 2               ;   BIOS README.
 000000r 2               ;
 000000r 2               ;   IO_MODE
 000000r 2               ;   -------
 000000r 2               ;   Bit 0 of IO_MODE selects the console output device:
-000000r 2               ;     0 = Video (TMS9918)    1 = Serial (R65C51)
+000000r 2               ;     0 = Video (6502-PICOVDP)    1 = Serial (R65C51)
 000000r 2               ;   Chrout ($A000) dispatches automatically based on IO_MODE.
 000000r 2               ;   Use SetIOMode / GetIOMode to change or query the active console.
 000000r 2               ;
@@ -105,7 +165,7 @@ Current file: Program.asm
 000000r 2               ;   Test individual bits before calling hardware-specific routines.
 000000r 2               ;   Example:
 000000r 2               ;     lda HW_PRESENT
-000000r 2               ;     and #HW_VID          ; Is video card present?
+000000r 2               ;     and #HW_VID          ; Is a PICOVDP with the built-in font present?
 000000r 2               ;     beq @NoVideo         ; Skip if not
 000000r 2               ;
 000000r 2               ; =============================================================================
@@ -126,8 +186,9 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; Safe zero page range for user programs:
 000000r 2               ; $3A-$FF (198 bytes free)
-000000r 2               ; Note: $2E-$35 belong to the Monitor and $36-$39 to XModemLoad/XModemSave;
-000000r 2               ;       neither range survives a call into those routines
+000000r 2               ;   $2C-$2D belong to SysDelay and $36-$39 to XModemLoad/XModemSave; neither
+000000r 2               ;   survives a call into those routines.  $2E-$35 are unassigned on 2.x (1.x's
+000000r 2               ;   Monitor used them)
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -135,7 +196,7 @@ Current file: Program.asm
 000000r 2               ; =============================================================================
 000000r 2               
 000000r 2               IRQ_PTR             := $0300             ; 2 bytes — IRQ handler vector (writable; default: internal Irq handler)
-000000r 2               BRK_PTR             := $0302             ; 2 bytes — BRK handler vector (writable; default: enters Monitor)
+000000r 2               BRK_PTR             := $0302             ; 2 bytes — BRK handler vector (writable; default: the BRK report, then BASIC)
 000000r 2               NMI_PTR             := $0304             ; 2 bytes — NMI handler vector (writable; default: RTI)
 000000r 2               
 000000r 2               IO_MODE             := $0306             ; 1 byte  — Console output mode (bit 0: 0=video, 1=serial)
@@ -153,9 +214,15 @@ Current file: Program.asm
 000000r 2               HW_SC               = %00010000          ; Bit 4: Serial card    (IO 5, R65C51)
 000000r 2               HW_GPIO             = %00100000          ; Bit 5: GPIO card      (IO 6, 65C22 VIA — keyboard/joysticks)
 000000r 2               HW_SID              = %01000000          ; Bit 6: Sound card     (IO 7, SID/ARMSID)
-000000r 2               HW_VID              = %10000000          ; Bit 7: Video card     (IO 8, TMS9918/pico9918)
+000000r 2               HW_VID              = %10000000          ; Bit 7: Video card     (IO 8, a 6502-PICOVDP with the built-in font)
 000000r 2               
-000000r 2               ; BRK register save area (populated by the BRK handler before entering Monitor):
+000000r 2               ; BRK register save area.  The BRK handler fills it and prints a report:
+000000r 2               ;     BREAK $nn AT $xxxx
+000000r 2               ;     A=xx X=xx Y=xx P=xx S=xx
+000000r 2               ; ($xxxx the BRK opcode, $nn the byte after it, S the stack pointer before the
+000000r 2               ; BRK), then warm-starts BASIC with the program kept.  CONT cannot continue.
+000000r 2               ; BASIC's SYS addr[,a[,x[,y]]] also leaves the routine's returned A, X, Y and P
+000000r 2               ; in BRK_A, BRK_X, BRK_Y and BRK_P.
 000000r 2               BRK_P               := $0310             ; Saved processor status (P)
 000000r 2               BRK_PCL             := $0311             ; Saved PC low byte (points to BRK instruction + 2)
 000000r 2               BRK_PCH             := $0312             ; Saved PC high byte
@@ -180,7 +247,7 @@ Current file: Program.asm
 000000r 2               ; Program image handoff (v1.3):
 000000r 2               PRG_IMAGE_END       := $038E             ; 2 bytes — End address of a program image placed at
 000000r 2                                                        ;   PROGRAM_START by a loader running outside BASIC
-000000r 2                                                        ;   (e.g. the Monitor's L command); 0 = none.
+000000r 2                                                        ;   (e.g. a cartridge's own loader); 0 = none.
 000000r 2                                                        ;   KernalInit zeroes it; BASIC consumes and re-zeroes it
 000000r 2                                                        ;   on entry, so a stale value is never acted on twice.
 000000r 2                                                        ;   A loader that drops a .prg at $0800 and then hands
@@ -189,6 +256,28 @@ Current file: Program.asm
 000000r 2               
 000000r 2               ; NVRAM save slots (v1.6):
 000000r 2               NV_ID               := $0390             ; 1 byte  — Owner ID input for NvWrite ($01-$FF; $00 is refused — that is NvErase)
+000000r 2               
+000000r 2               ; Video variables (v2.0):
+000000r 2               VID_PEN             := $0391             ; 1 byte  — Attribute byte for new output, fg<<4 | bg
+000000r 2                                                        ;   KernalInit sets $1F (black on white); NEW, RUN,
+000000r 2                                                        ;   CLR and errors keep it.  Set it with VideoSetColor
+000000r 2               VID_TOP             := $0392             ; 1 byte  — Name-table row shown at the top (0-23);
+000000r 2                                                        ;   L0SCRY = VID_TOP × 8.  A cell's name byte is at
+000000r 2                                                        ;   ((row + VID_TOP) mod 24) × 40 + column
+000000r 2               VID_MODE            := $0393             ; 1 byte  — $00 = console not set up since KernalInit
+000000r 2                                                        ;   (card in the legacy submode); $01 = Text console
+000000r 2                                                        ;   intact; otherwise low nibble = the VMODE the Kernal
+000000r 2                                                        ;   last set, b7 = disturbed (sprites, scroll, layers)
+000000r 2               VDP_FW              := $0394             ; 1 byte  — STAT5 (firmware version, BCD) at boot; $00 if no PICOVDP
+000000r 2               VDP_CAPS            := $0395             ; 1 byte  — STAT6 (capability bits, VC_CAP_*) at boot; $00 if no PICOVDP
+000000r 2               VDP_L0CTRL_SHADOW   := $0396             ; 1 byte  — What was last written to the write-only L0CTRL
+000000r 2               VDP_L1CTRL_SHADOW   := $0397             ; 1 byte  — What was last written to the write-only L1CTRL
+000000r 2                                                        ;   Both are kept by VdpWriteReg, VdpSetScroll, VdpLayer
+000000r 2                                                        ;   and InitVideo; a direct register write bypasses them
+000000r 2               VDP_P0              := $0398             ; 1 byte  — Parameter block for VdpSprite and VdpSetScroll
+000000r 2               VDP_P1              := $0399             ; 1 byte
+000000r 2               VDP_P2              := $039A             ; 1 byte
+000000r 2               VDP_P3              := $039B             ; 1 byte
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -205,7 +294,8 @@ Current file: Program.asm
 000000r 2               ;   SECTION 4: KERNAL JUMP TABLE ($A000-$A0FF)
 000000r 2               ; =============================================================================
 000000r 2               ; All entry points are stable 3-byte JMP instructions.  Call via JSR.
-000000r 2               ; Unimplemented slots return immediately (RTS).
+000000r 2               ; 72 entries ($A000-$A0D5); the reserved slots after them ($A0D8-$A0FE) return
+000000r 2               ; immediately (RTS).
 000000r 2               
 000000r 2               ; --- Character I/O ---
 000000r 2               Chrout              := $A000             ; Output character (dispatched by IO_MODE)
@@ -238,43 +328,75 @@ Current file: Program.asm
 000000r 2               GetIOMode           := $A012             ; Get IO_MODE
 000000r 2                                                        ;   Out: A = current IO_MODE
 000000r 2               
-000000r 2               ; --- Video (TMS9918 / pico9918) ---
-000000r 2               InitVideo           := $A015             ; Initialize TMS9918 (text mode, 40×24)
-000000r 2                                                        ;   Writes the 8 mode registers, then reloads the
-000000r 2                                                        ;   character set into the pattern table (VRAM $0800)
-000000r 2                                                        ;   A program that switched the VDP to a graphics mode
-000000r 2                                                        ;   can fully restore text mode with this one call
-000000r 2                                                        ;   STR_PTR is used internally but saved and restored
-000000r 2                                                        ;   Modifies: A, X, Y
-000000r 2               
-000000r 2               VideoClear          := $A018             ; Clear screen (fill with spaces), reset cursor to (0,0)
+000000r 2               ; --- Video console (6502-PICOVDP) ---
+000000r 2               ;   The console entries marked "brings the console up" call InitVideo and
+000000r 2               ;   clear the screen first if nothing has since KernalInit (VID_MODE = $00).
+000000r 2               InitVideo           := $A015             ; Put the PICOVDP in the Kernal's Text-mode console
+000000r 2                                                        ;   With the display off, writes the Text layout: VMODE
+000000r 2                                                        ;   Text (40×24 of 6×8), name table $0000, attributes
+000000r 2                                                        ;   $0400, pattern table $0800, PALBASE $3F ($FC00),
+000000r 2                                                        ;   VBANK 0, VINC +1, IRQEN 0, STATSEL_A 0, scroll 0,
+000000r 2                                                        ;   layer 1 and sprites off.  Then has the card load its
+000000r 2                                                        ;   built-in font into $0800 (VdpLoadFont, font $00) and
+000000r 2                                                        ;   waits for it: returns after the next vertical blank,
+000000r 2                                                        ;   up to a frame later.  Restores palette row 0, sets
+000000r 2                                                        ;   the border from VID_PEN, turns the display on and
+000000r 2                                                        ;   sets VID_MODE = $01
+000000r 2                                                        ;   Does not clear the screen: the name and attribute
+000000r 2                                                        ;   tables are shown as they are, unscrolled
+000000r 2                                                        ;   A program that switched modes, moved tables or
+000000r 2                                                        ;   overwrote the glyphs gets the console back with this
+000000r 2                                                        ;   one call.  It writes IRQEN = 0, so a program using a
+000000r 2                                                        ;   VDP interrupt enables it again afterwards
 000000r 2                                                        ;   Skips silently if no video card is fitted
-000000r 2                                                        ;   Modifies: A, X, Y
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
+000000r 2               VideoClear          := $A018             ; Clear screen to spaces in the pen, cursor home, unscrolled
+000000r 2                                                        ;   Fills the 960 names at $0000 with $20 and the 960
+000000r 2                                                        ;   attributes at $0400 with VID_PEN; VID_TOP = 0
+000000r 2                                                        ;   Brings the console up
+000000r 2                                                        ;   Skips silently if no video card is fitted
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
 000000r 2               
 000000r 2               VideoPutChar        := $A01B             ; Write character at cursor position (no cursor advance)
-000000r 2                                                        ;   In: A = character
+000000r 2                                                        ;   In: A = character; its attribute byte is VID_PEN
+000000r 2                                                        ;   No card check and no console bring-up
+000000r 2                                                        ;   Modifies: Flags
 000000r 2               
 000000r 2               VideoSetCursor      := $A01E             ; Set cursor position
-000000r 2                                                        ;   In: X = column (0-39), Y = row (0-23)
+000000r 2                                                        ;   In: X = column (0-39), Y = row (0-23), on the screen
+000000r 2                                                        ;   as shown (VID_TOP is folded in)
+000000r 2                                                        ;   Brings the console up
 000000r 2                                                        ;   Skips silently if no video card is fitted
-000000r 2                                                        ;   Modifies: A
+000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
 000000r 2               VideoGetCursor      := $A021             ; Get cursor position
-000000r 2                                                        ;   Out: X = column (0-39), Y = row (0-23)
+000000r 2                                                        ;   Out: X = column (0-39), Y = row (0-23), screen coordinates
+000000r 2                                                        ;   Brings the console up
+000000r 2                                                        ;   Modifies: Flags
 000000r 2               
-000000r 2               VideoScroll         := $A024             ; Scroll screen up one line, clear bottom row
-000000r 2                                                        ;   Modifies: A, X, Y
-000000r 2               
-000000r 2               VideoSetColor       := $A027             ; Set TMS9918 text color
-000000r 2                                                        ;   In: A = color byte (high nibble = foreground, low nibble = background)
-000000r 2                                                        ;   See TMS9918 Color Constants below
+000000r 2               VideoScroll         := $A024             ; Scroll screen up one line, in hardware
+000000r 2                                                        ;   Moves the origin down a row (VID_TOP, L0SCRY) and
+000000r 2                                                        ;   blanks the new bottom row in the pen; nothing is
+000000r 2                                                        ;   copied.  The cursor keeps its screen position
 000000r 2                                                        ;   Skips silently if no video card is fitted
-000000r 2                                                        ;   Modifies: A
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
+000000r 2               VideoSetColor       := $A027             ; Set the pen for later output, and the border
+000000r 2                                                        ;   In: A = fg<<4 | bg (palette row 0, see Colour Constants)
+000000r 2                                                        ;   VID_PEN = A, and register 7 (VC_REG_COLOR) = A: its
+000000r 2                                                        ;   low nibble is the border, so the border follows the
+000000r 2                                                        ;   background.  Characters already on screen keep
+000000r 2                                                        ;   their colours; VideoClear fills with the pen
+000000r 2                                                        ;   Brings the console up
+000000r 2                                                        ;   Skips silently if no video card is fitted
+000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
 000000r 2               VideoChroutRaw      := $A02A             ; Output char to video with no control-code handling
-000000r 2                                                        ;   In: A = character code (0-255)
+000000r 2                                                        ;   In: A = character code (0-255), glyph n of the font
 000000r 2                                                        ;   Preserves: A, X, Y
 000000r 2                                                        ;   Always renders glyph, never interprets CR/LF/BS/BEL
+000000r 2                                                        ;   Brings the console up
 000000r 2               
 000000r 2               ; --- Sound (SID / ARMSID) ---
 000000r 2               InitSID             := $A02D             ; Initialize SID (clear all registers, volume=15)
@@ -439,10 +561,14 @@ Current file: Program.asm
 000000r 2                                                        ;   Caller MUST reset the stack pointer before JSR:
 000000r 2                                                        ;     ldx #$ff / txs / jsr KernalInit
 000000r 2                                                        ;   Zeroes BOOT_VECTOR, PRG_IMAGE_END and CF_DISK;
-000000r 2                                                        ;   sets HW_PRESENT, IO_MODE, IRQ/BRK/NMI ptrs
+000000r 2                                                        ;   sets HW_PRESENT, IO_MODE, IRQ/BRK/NMI ptrs,
+000000r 2                                                        ;   VID_PEN = $1F, VDP_FW, VDP_CAPS and VID_MODE = $00
+000000r 2                                                        ;   Leaves a PICOVDP in the legacy submode (VMODE $0),
+000000r 2                                                        ;   unscrolled, as its own reset does: the Text console
+000000r 2                                                        ;   comes up on first use, not here
 000000r 2                                                        ;   Does NOT reset the stack pointer
 000000r 2                                                        ;   Does NOT enable interrupts (caller must CLI)
-000000r 2                                                        ;   Does NOT play beep, display splash, or enter boot menu
+000000r 2                                                        ;   Does NOT play beep, print, or start BASIC
 000000r 2                                                        ;   Does NOT halt if no console is detected
 000000r 2                                                        ;   Modifies: All registers, flags
 000000r 2               
@@ -520,8 +646,6 @@ Current file: Program.asm
 000000r 2               ;       off for a slot copy, which uses the DS1511Y's burst mode (every access
 000000r 2               ;       of RTC_RAM_DATA advances RTC_RAM_ADDR); an NMI handler must not touch
 000000r 2               ;       NVRAM.  Burst mode is off again on return.
-000000r 2               ;     * On an older BIOS these are reserved slots: a bare RTS that leaves the
-000000r 2               ;       carry as the caller had it.  Check KernalVersion for 1.6 or later.
 000000r 2               NvStat              := $A09F             ; Report a slot's state
 000000r 2                                                        ;   In:  X = slot (0-15)
 000000r 2                                                        ;   Out: A = NV_EMPTY / NV_VALID / NV_BAD, Y = owner ID
@@ -554,6 +678,122 @@ Current file: Program.asm
 000000r 2               NvFormat            := $A0AE             ; Erase all 16 slots
 000000r 2                                                        ;   Out: C set if no RTC
 000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
+000000r 2               ; --- PICOVDP (v2.0) ---
+000000r 2               ;   Each returns carry set, having written nothing, when no card is fitted
+000000r 2               ;   (HW_VID clear) or an argument is out of range, and carry clear otherwise.
+000000r 2               ;   Port A only, and VBANK = 0, VINC = +1 on the way out, like the console.
+000000r 2               ;   Only VdpWriteReg and the entries built on it keep VID_MODE and the LxCTRL
+000000r 2               ;   shadows; a program that writes VC_REG directly keeps its own records.
+000000r 2               
+000000r 2               VdpInfo             := $A0B1             ; What the boot probe found
+000000r 2                                                        ;   Out: A = VDP_FW (STAT5), X = VDP_CAPS (STAT6),
+000000r 2                                                        ;        Y = VC_ID ($AC), carry clear
+000000r 2                                                        ;        No card: carry set, Y = 0, A = X = 0 (or, for a
+000000r 2                                                        ;        PICOVDP without the font, what it reported)
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
+000000r 2               VdpWriteReg         := $A0B4             ; Write a register, keeping the Kernal's records of it
+000000r 2                                                        ;   In: A = value, X = register (0-127, VC_REG_*)
+000000r 2                                                        ;   A VMODE write sets VID_MODE (b7 set when it takes the
+000000r 2                                                        ;   card back to Text or legacy from anything else); an
+000000r 2                                                        ;   L0CTRL / L1CTRL write sets VDP_L0CTRL_SHADOW /
+000000r 2                                                        ;   VDP_L1CTRL_SHADOW
+000000r 2                                                        ;   Out: C set, nothing written, if no card or X > 127
+000000r 2                                                        ;   Preserves: X, Y
+000000r 2                                                        ;   Modifies: Flags, A
+000000r 2               
+000000r 2               VdpSetMode          := $A0B7             ; Write VMODE, and VID_MODE with it
+000000r 2                                                        ;   In: A = VC_VMODE_TEXT, _COMPACT, _GRAPHICS or _FULL (1-4)
+000000r 2                                                        ;   The register only: tables, layers and sprites are the
+000000r 2                                                        ;   caller's to lay out.  The Text console is InitVideo
+000000r 2                                                        ;   Out: C set, nothing written, if no card or A out of range
+000000r 2                                                        ;   Modifies: Flags, A, X
+000000r 2               
+000000r 2               VdpPoke             := $A0BA             ; Write one byte anywhere in VRAM
+000000r 2                                                        ;   In: A = value, X = address low, Y = address high
+000000r 2                                                        ;       ($0000-$FFFF; VBANK is set and put back to 0)
+000000r 2                                                        ;   Out: C set, nothing written, if no card
+000000r 2                                                        ;   Modifies: Flags, A, X
+000000r 2               
+000000r 2               VdpPeek             := $A0BD             ; Read one byte anywhere in VRAM
+000000r 2                                                        ;   In: X = address low, Y = address high ($0000-$FFFF)
+000000r 2                                                        ;   Out: A = the byte; C set, nothing read, if no card
+000000r 2                                                        ;   Modifies: Flags, A, X
+000000r 2               
+000000r 2               VdpSetPalette       := $A0C0             ; Set one palette entry, at VC_PALETTE + 2 × entry
+000000r 2                                                        ;   In: X = entry (0-255), A = %0000RRRR, Y = %GGGGBBBB
+000000r 2                                                        ;   Assumes PALBASE = $3F, where InitVideo puts it; a
+000000r 2                                                        ;   program that moves PALBASE writes its own
+000000r 2                                                        ;   Out: C set, nothing written, if no card
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
+000000r 2               WaitVBlank          := $A0C3             ; Return at the start of the next vertical blank
+000000r 2                                                        ;   Polls STAT3 b0 on port A, then puts STATSEL_A back to
+000000r 2                                                        ;   0 without reading STAT0: STAT0's flags and the STAT1
+000000r 2                                                        ;   latches are left as they were
+000000r 2                                                        ;   No card: waits 2 cs (SysDelay) and returns C set
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
+000000r 2               VdpLoadFile         := $A0C6             ; Load a named file from the current disk into VRAM
+000000r 2                                                        ;   In: STR_PTR = filename, FS_IO_ADDR ($037F) = VRAM
+000000r 2                                                        ;       address (any of the 64 KB)
+000000r 2                                                        ;   Writes exactly the file's bytes, never the rest of
+000000r 2                                                        ;   its last sector
+000000r 2                                                        ;   Out: C clear, FS_FILE_SIZE = bytes written
+000000r 2                                                        ;        C set if no card (nothing read), not found, or
+000000r 2                                                        ;        read error
+000000r 2                                                        ;   Modifies: Flags, A, X, Y, CF_LBA, CF_BUF_PTR,
+000000r 2                                                        ;             XFER_REMAIN, FS sector buffer
+000000r 2               
+000000r 2               VdpLoadFont         := $A0C9             ; Load a built-in font into layer 0's pattern table
+000000r 2                                                        ;   In: A = font ID; VC_FONT_CP437 ($00) is the only one
+000000r 2                                                        ;   accepted.  Writes VC_REG_FONT for layer 0, which
+000000r 2                                                        ;   copies to L0PAT × $800 as it stands at the call, and
+000000r 2                                                        ;   returns at the next vertical blank (WaitVBlank), when
+000000r 2                                                        ;   the copy has landed.  STAT0 is not read
+000000r 2                                                        ;   Out: C set, nothing written, if no card or A <> $00
+000000r 2                                                        ;   Modifies: Flags, A, X, Y
+000000r 2               
+000000r 2               VdpSprite           := $A0CC             ; Write one sprite's four attribute bytes
+000000r 2                                                        ;   In: X = sprite (0-63), VDP_P0 = Y, VDP_P1 = X bits
+000000r 2                                                        ;       7:0, VDP_P2 = pattern, VDP_P3 = attributes
+000000r 2                                                        ;       (VC_ATTR_*: b7 X bit 8, b6 priority, b5:4 flips,
+000000r 2                                                        ;       b3:0 sub-palette)
+000000r 2                                                        ;   Assumes the sprite attribute table at VRAM $2000
+000000r 2                                                        ;   (SPRATTR = $40, where BASIC's SCREEN 1-3 put it); a
+000000r 2                                                        ;   program that moves SPRATTR writes sprites with VdpPoke
+000000r 2                                                        ;   Sets VID_MODE b7 (disturbed)
+000000r 2                                                        ;   Out: C set, nothing written, if no card or X > 63
+000000r 2                                                        ;   Preserves: X
+000000r 2                                                        ;   Modifies: Flags, A, Y
+000000r 2               
+000000r 2               VdpSetScroll        := $A0CF             ; Scroll a layer
+000000r 2                                                        ;   In: X = layer (0-1), A = x bits 7:0, Y = y,
+000000r 2                                                        ;       VDP_P0 = x bit 8 (0 or not)
+000000r 2                                                        ;   Writes LxSCRX, LxSCRY and LxCTRL b6 (VC_LCTRL_SCRX8),
+000000r 2                                                        ;   LxCTRL's other bits from its shadow
+000000r 2                                                        ;   Sets VID_MODE b7 (disturbed)
+000000r 2                                                        ;   Out: C set, nothing written, if no card or X > 1
+000000r 2                                                        ;   Modifies: Flags, A, X
+000000r 2               
+000000r 2               VdpLayer            := $A0D2             ; Show or hide a layer
+000000r 2                                                        ;   In: X = layer (0-1), A = 0 to hide, anything else to show
+000000r 2                                                        ;   Sets or clears LxCTRL b4 (VC_LCTRL_ENABLE), its other
+000000r 2                                                        ;   bits from the shadow
+000000r 2                                                        ;   Sets VID_MODE b7 (disturbed)
+000000r 2                                                        ;   Out: C set, nothing written, if no card or X > 1
+000000r 2                                                        ;   Modifies: Flags, A, X
+000000r 2               
+000000r 2               VdpStatus           := $A0D5             ; Read a status register through port A
+000000r 2                                                        ;   In: X = status register (0-15, VC_STAT*)
+000000r 2                                                        ;   Out: A = its value; C set, nothing read, if no card
+000000r 2                                                        ;        or X > 15
+000000r 2                                                        ;   STATSEL_A goes back to 0 without reading STAT0.
+000000r 2                                                        ;   Reading STAT0 itself clears its flags, and STAT1 its
+000000r 2                                                        ;   latches (see the status registers in Section 6)
+000000r 2                                                        ;   Preserves: X, Y
+000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -894,23 +1134,86 @@ Current file: Program.asm
 000000r 2               SID_NOTE_Bb7        = SID_NOTE_AS7
 000000r 2               ; Note: B7 (~3951 Hz = $102F0) exceeds the 16-bit SID register — not defined
 000000r 2               
-000000r 2               ; --- Video Card (TMS9918 / pico9918) (IO 8: $9C00-$9C01) ---
-000000r 2               ;   Text mode: 40 columns × 24 rows.  Name table at VRAM $0000 (960 bytes).
-000000r 2               ;   Pattern table at VRAM $0800 (2 KB, 256 × 8-byte character patterns).
-000000r 2               ;   To write to a VRAM address: write low byte to VC_REG, then (high | $40) to VC_REG.
-000000r 2               ;   To read from a VRAM address: write low byte to VC_REG, then high byte to VC_REG.
-000000r 2               ;   Register writes: write data byte to VC_REG, then (reg# | $80) to VC_REG.
-000000r 2               VC_DATA             := $9C00             ; R/W — VRAM data (auto-increments address)
-000000r 2               VC_REG              := $9C01             ; Write — Address/register port
-000000r 2               VC_STATUS           := $9C01             ; Read — Status register
+000000r 2               ; --- Video Card (6502-PICOVDP) (IO 8: $9C00-$9C03) ---
+000000r 2               ;   Two complete, independent port pairs.  Each has its own VRAM pointer,
+000000r 2               ;   read-ahead byte, command flip-flop and status selector; both reach the
+000000r 2               ;   same 64 KB of VRAM and the same registers (VBANK and VINC included).
+000000r 2               ;   Use port A in foreground code and port B in interrupt handlers, and a
+000000r 2               ;   handler never breaks a command pair half written — no sei/cli needed
+000000r 2               ;   around VDP work.  A handler that writes VBANK or VINC puts them back.
+000000r 2               ;
+000000r 2               ;   The command protocol is the TMS9918's, on either port: two writes to the
+000000r 2               ;   command port, a payload byte P and then a command byte C.
+000000r 2               ;     Register write:    P = value,       C = VC_REG_WRITE  | register (0-127)
+000000r 2               ;     VRAM write addr:   P = address low, C = VC_ADDR_WRITE | address bits 13:8
+000000r 2               ;     VRAM read addr:    P = address low, C = address bits 13:8 (prefetches)
+000000r 2               ;   Address bits 15:14 come from VBANK.  After each VC_DATA access the pointer
+000000r 2               ;   moves by VINC (reset +1), carrying into the bank bits.
+000000r 2               ;   Reading a status port returns the status register its STATSEL names, and
+000000r 2               ;   resets that pair's flip-flop — read status once to resynchronize.
+000000r 2               VC_DATA             := $9C00             ; R/W — Port A VRAM data (pointer advances by VINC)
+000000r 2               VC_REG              := $9C01             ; Write — Port A command (register / address)
+000000r 2               VC_STATUS           := $9C01             ; Read — Port A status (register named by STATSEL_A)
+000000r 2               VC_DATA2            := $9C02             ; R/W — Port B VRAM data (for interrupt handlers)
+000000r 2               VC_REG2             := $9C03             ; Write — Port B command
+000000r 2               VC_STATUS2          := $9C03             ; Read — Port B status (register named by STATSEL_B)
+000000r 2               
+000000r 2               ; Command byte bits (second write to VC_REG / VC_REG2):
+000000r 2               VC_REG_WRITE        = $80                ; %1rrrrrrr — write register r with the payload
+000000r 2               VC_ADDR_WRITE       = $40                ; %01aaaaaa — set the VRAM pointer for writing
+000000r 2                                                        ; %00aaaaaa — set it for reading (no bit to OR in)
+000000r 2               
+000000r 2               ; Register numbers (write-only; read state back through the status registers).
+000000r 2               ;   Registers $02-$06 are aliases of L0NAME, L0ATTR, L0PAT, SPRATTR and SPRPAT,
+000000r 2               ;   so a TMS9918 program's writes to registers 2-6 reach them.  The names
+000000r 2               ;   below are the block addresses; the aliases get no names of their own.
+000000r 2               ; $00-$07 — Legacy core
+000000r 2               VC_REG_MODE0        = $00                ; b1 M3 (see VC_MODE0_*)
+000000r 2               VC_REG_MODE1        = $01                ; DISP, IE, M1, M2, SPRSIZE, SPRMAG (see VC_MODE1_*)
+000000r 2               VC_REG_COLOR        = $07                ; b7:4 default foreground, b3:0 backdrop/border
+000000r 2               ; $08-$0F — Access and interrupts
+000000r 2               VC_REG_VBANK        = $08                ; VRAM address bits 15:14 (b1:0), sampled by an address command
+000000r 2               VC_REG_VINC         = $09                ; Pointer stride, signed -128..+127 ($00 = none; reset $01)
+000000r 2               VC_REG_IRQEN        = $0A                ; Interrupt enables (see VC_IRQ_*)
+000000r 2               VC_REG_IRQLINE      = $0B                ; Scanline compare, display line 0-255
+000000r 2               VC_REG_PALBASE      = $0C                ; Palette base, b5:0 × $400 (reset $3F = VC_PALETTE)
+000000r 2               VC_REG_VMODE        = $0D                ; Display mode (see VC_VMODE_*)
+000000r 2               VC_REG_STATSEL_B    = $0E                ; Status register port B reads (0-15)
+000000r 2               VC_REG_STATSEL_A    = $0F                ; Status register port A reads (0-15)
+000000r 2               ; $10-$17 — Layer 0
+000000r 2               VC_REG_L0NAME       = $10                ; Name table base, × $400 (alias $02)
+000000r 2               VC_REG_L0ATTR       = $11                ; Attribute table base, × $400 (alias $03)
+000000r 2               VC_REG_L0PAT        = $12                ; Pattern table base, × $800 (alias $04)
+000000r 2               VC_REG_L0SCRX       = $13                ; Horizontal scroll, bits 7:0 (bit 8 is VC_LCTRL_SCRX8)
+000000r 2               VC_REG_L0SCRY       = $14                ; Vertical scroll, pixels
+000000r 2               VC_REG_L0CTRL       = $15                ; Depth, attribute source, enable, opacity (see VC_LCTRL_*; reset $3C)
+000000r 2               VC_REG_L0PAL        = $16                ; b3:0 palette group high bits
+000000r 2               ; $18-$1F — Layer 1 (reset: disabled, index 0 transparent)
+000000r 2               VC_REG_L1NAME       = $18                ; Name table base, × $400
+000000r 2               VC_REG_L1ATTR       = $19                ; Attribute table base, × $400
+000000r 2               VC_REG_L1PAT        = $1A                ; Pattern table base, × $800
+000000r 2               VC_REG_L1SCRX       = $1B                ; Horizontal scroll, bits 7:0 (bit 8 is VC_LCTRL_SCRX8)
+000000r 2               VC_REG_L1SCRY       = $1C                ; Vertical scroll, pixels
+000000r 2               VC_REG_L1CTRL       = $1D                ; As L0CTRL (reset $0C)
+000000r 2               VC_REG_L1PAL        = $1E                ; b3:0 palette group high bits
+000000r 2               ; $20-$27 — Sprites
+000000r 2               VC_REG_SPRATTR      = $20                ; Sprite attribute table base, × $80 (alias $05)
+000000r 2               VC_REG_SPRPAT       = $21                ; Sprite pattern table base, × $800 (alias $06)
+000000r 2               VC_REG_SPRCOUNT     = $22                ; Active sprite slots, 0-64 (reset 32)
+000000r 2               VC_REG_SPRCTRL      = $23                ; Enable, collision, $D0 terminator, depth (see VC_SPRCTRL_*; reset $27)
+000000r 2               VC_REG_SPRLIMIT     = $24                ; Sprites drawn per scanline, 1-32 (reset 16)
+000000r 2               VC_REG_SPRPAL       = $25                ; b3:0 palette group high bits for sprites
+000000r 2               ; $28-$7F — Font, and reserved ($28-$2F are reserved for a blitter)
+000000r 2               VC_REG_FONT         = $30                ; Load a built-in font: b7 layer, b6:0 font ID (see VC_FONT_*)
+000000r 2               ; $17, $1F, $26-$27, $28-$2F and $31-$7F are reserved: write 0.
 000000r 2               
 000000r 2               ; =============================================================================
 000000r 2               ;   SECTION 6: USEFUL CONSTANTS
 000000r 2               ; =============================================================================
 000000r 2               
 000000r 2               ; --- BIOS Version ---
-000000r 2               BIOS_VERSION_MAJOR  = 1
-000000r 2               BIOS_VERSION_MINOR  = 6
+000000r 2               BIOS_VERSION_MAJOR  = 2
+000000r 2               BIOS_VERSION_MINOR  = 0
 000000r 2               
 000000r 2               ; --- NVRAM Save Slots (v1.6) ---
 000000r 2               NV_SLOTS            = 16                 ; Save slots in RTC NVRAM
@@ -929,13 +1232,135 @@ Current file: Program.asm
 000000r 2               CHAR_ESC            = $1B                ; Escape
 000000r 2               CHAR_SPACE          = $20                ; Space
 000000r 2               
-000000r 2               ; --- Video Dimensions ---
+000000r 2               ; --- Video Dimensions (Text mode) ---
+000000r 2               ;   The text console's layout, which the PICOVDP's Text mode keeps.
 000000r 2               VID_COLS            = 40                 ; Screen width in columns
 000000r 2               VID_ROWS            = 24                 ; Screen height in rows
-000000r 2               VID_NAME_TABLE      = $0000              ; VRAM address of name table (40×24 = 960 bytes)
-000000r 2               VID_PATTERN_TABLE   = $0800              ; VRAM address of pattern/character table (2048 bytes)
+000000r 2               VID_NAME_TABLE      = $0000              ; VRAM address of name table (40×24 = 960 bytes; L0NAME = $00)
+000000r 2               VID_ATTR_TABLE      = $0400              ; VRAM address of attribute table (960 bytes, fg<<4 | bg; L0ATTR = $01)
+000000r 2               VID_PATTERN_TABLE   = $0800              ; VRAM address of pattern/character table (2048 bytes; L0PAT = $01)
 000000r 2               
-000000r 2               ; --- TMS9918 Color Constants (for VideoSetColor) ---
+000000r 2               ; --- 6502-PICOVDP: MODE0 / MODE1 bits ---
+000000r 2               ;   M1, M2 and M3 select the display mode only while VMODE is VC_VMODE_LEGACY.
+000000r 2               VC_MODE0_M3         = %00000010          ; M3 legacy mode select
+000000r 2               VC_MODE1_DISP       = %01000000          ; Display enable (clear: backdrop only)
+000000r 2               VC_MODE1_IE         = %00100000          ; Vertical blank IRQ enable (alias of VC_IRQ_VBLANK in IRQEN)
+000000r 2               VC_MODE1_M1         = %00010000          ; M1 legacy mode select (Text)
+000000r 2               VC_MODE1_M2         = %00001000          ; M2 legacy mode select
+000000r 2               VC_MODE1_SPRSIZE    = %00000010          ; Sprite size: 0 = 8×8, 1 = 16×16
+000000r 2               VC_MODE1_SPRMAG     = %00000001          ; Magnify sprites ×2
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: VMODE values ---
+000000r 2               VC_VMODE_LEGACY     = $0                 ; M1/M2/M3 select the mode (reset); $5-$F behave as $0
+000000r 2               VC_VMODE_TEXT       = $1                 ; 40×24 cells of 6×8, 240×192
+000000r 2               VC_VMODE_COMPACT    = $2                 ; 32×24 cells of 8×8, 256×192
+000000r 2               VC_VMODE_GRAPHICS   = $3                 ; 32×30 cells of 8×8, 256×240
+000000r 2               VC_VMODE_FULL       = $4                 ; 40×30 cells of 8×8, 320×240, no border
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: L0CTRL / L1CTRL bits ---
+000000r 2               ;   Pick one depth and one attribute source, then OR in the flags.
+000000r 2               VC_LCTRL_1BPP       = $00                ; b1:0 bit depth — 8 bytes per tile
+000000r 2               VC_LCTRL_2BPP       = $01                ;   16 bytes per tile
+000000r 2               VC_LCTRL_4BPP       = $02                ;   32 bytes per tile
+000000r 2               VC_LCTRL_8BPP       = $03                ;   64 bytes per tile
+000000r 2               VC_LCTRL_ATTR_CELL  = $00                ; b3:2 attribute source — one byte per cell at LxATTR + cell
+000000r 2               VC_LCTRL_ATTR_GROUP = $04                ;   one byte per 8 patterns at LxATTR + (pattern >> 3)
+000000r 2               VC_LCTRL_ATTR_ROW   = $08                ;   one byte per pattern row at LxATTR + pattern × 8 + row
+000000r 2               VC_LCTRL_ATTR_NONE  = $0C                ;   no attribute fetch
+000000r 2               VC_LCTRL_ENABLE     = $10                ; b4 layer enable
+000000r 2               VC_LCTRL_OPAQUE     = $20                ; b5 index 0 opaque
+000000r 2               VC_LCTRL_SCRX8      = $40                ; b6 horizontal scroll bit 8 (Full mode's 320 pixels)
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: attribute byte (layers at 2/4/8bpp, and sprites) ---
+000000r 2               ;   At 1bpp a layer's colour byte is foreground (b7:4) and background (b3:0).
+000000r 2               VC_ATTR_SUBPAL      = $0F                ; b3:0 sub-palette (ignored by an 8bpp layer)
+000000r 2               VC_ATTR_FLIPH       = $10                ; b4 flip horizontally
+000000r 2               VC_ATTR_FLIPV       = $20                ; b5 flip vertically
+000000r 2               VC_ATTR_PRIORITY    = $40                ; b6 priority (layer tile in front of sprites; sprite in front of layer 1)
+000000r 2               VC_ATTR_BIT8        = $80                ; b7 layer: pattern index bit 8 (2/4bpp); sprite: X bit 8
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: SPRCTRL bits ---
+000000r 2               VC_SPRCTRL_ENABLE   = $01                ; b0 sprites enable
+000000r 2               VC_SPRCTRL_COLLIDE  = $02                ; b1 collision detection enable
+000000r 2               VC_SPRCTRL_TERM     = $04                ; b2 a Y of VC_SPRITE_END ends the sprite list
+000000r 2               VC_SPRCTRL_DETAIL   = $08                ; b3 detailed collision map (STAT8-STAT15)
+000000r 2               VC_SPRCTRL_1BPP     = $00                ; b5:4 sprite bit depth
+000000r 2               VC_SPRCTRL_2BPP     = $10
+000000r 2               VC_SPRCTRL_4BPP     = $20
+000000r 2               VC_SPRCTRL_8BPP     = $30
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: interrupt sources (IRQEN bits, latched in STAT1) ---
+000000r 2               VC_IRQ_VBLANK       = $01                ; b0 end of the active picture, once a frame
+000000r 2               VC_IRQ_SCANLINE     = $02                ; b1 display line matches IRQLINE
+000000r 2               VC_IRQ_OVERFLOW     = $04                ; b2 a sprite was dropped, at most once a frame
+000000r 2               VC_IRQ_COLLISION    = $08                ; b3 two sprites collided, at most once a frame
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: status registers (values for STATSEL_A / STATSEL_B) ---
+000000r 2               ;   Reading STAT0 clears its flags, STAT7, the collision map and the vblank,
+000000r 2               ;   overflow and collision latches in STAT1.  Reading STAT1 clears only the
+000000r 2               ;   STAT1 latches — so a handler on port B reads STAT1 and foreground code
+000000r 2               ;   polling STAT0 on port A still sees F.  Read STAT7 and the collision map
+000000r 2               ;   before STAT0.
+000000r 2               VC_STAT0            = 0                  ; F, OVF, COL, first sprite dropped (TMS9918 status)
+000000r 2               VC_STAT1            = 1                  ; Latched interrupt sources still enabled in IRQEN
+000000r 2               VC_STAT2            = 2                  ; Current display line, low 8 bits
+000000r 2               VC_STAT3            = 3                  ; Blanking (see VC_STAT3_*)
+000000r 2               VC_STAT4            = 4                  ; Identification byte, VC_ID
+000000r 2               VC_STAT5            = 5                  ; Firmware version, BCD (high nibble major, low nibble minor)
+000000r 2               VC_STAT6            = 6                  ; Capabilities (see VC_CAP_*)
+000000r 2               VC_STAT7            = 7                  ; Index (0-63) of the first sprite dropped on the latest overflowing line
+000000r 2               VC_STAT_COLLIDE     = 8                  ; STAT8-STAT15: collision map, sprite s is bit s mod 8 of STAT(8 + s/8)
+000000r 2               
+000000r 2               VC_STAT0_F          = $80                ; A picture has ended (set whatever IRQEN holds)
+000000r 2               VC_STAT0_OVF        = $40                ; A sprite has been dropped
+000000r 2               VC_STAT0_COL        = $20                ; Two sprites have collided
+000000r 2               VC_STAT0_SPRITE     = $1F                ; Low five bits of the first sprite dropped
+000000r 2               
+000000r 2               VC_STAT3_VBLANK     = $01                ; Vertical blanking (borders included)
+000000r 2               VC_STAT3_HBLANK     = $02                ; Horizontal blanking (advisory)
+000000r 2               
+000000r 2               VC_ID               = $AC                ; STAT4 on a 6502-PICOVDP
+000000r 2               
+000000r 2               VC_CAP_LAYER2       = $01                ; STAT6 b0 two layers
+000000r 2               VC_CAP_8BPP         = $02                ; STAT6 b1 8bpp layer
+000000r 2               VC_CAP_FLIP         = $04                ; STAT6 b2 sprite flip
+000000r 2               VC_CAP_SCROLL       = $08                ; STAT6 b3 hardware scroll
+000000r 2               VC_CAP_SCANLINE     = $10                ; STAT6 b4 scanline IRQ
+000000r 2               VC_CAP_VRAM64K      = $20                ; STAT6 b5 64 KB VRAM
+000000r 2                                                        ; STAT6 b6 reserved (a blitter)
+000000r 2               VC_CAP_FONT         = $80                ; STAT6 b7 built-in font: VC_REG_FONT and font $00, loaded at reset
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: FONT values ---
+000000r 2               ;   Reset writes font VC_FONT_CP437 to $0800-$0FFF (VID_PATTERN_TABLE), so a
+000000r 2               ;   program that selects Text and sets L0PAT = $01 finds it already there.
+000000r 2               ;   InitVideo loads it again, and VdpLoadFont loads it for layer 0 and waits.
+000000r 2               ;   A write to VC_REG_FONT loads a font into a layer's pattern table:
+000000r 2               ;   OR a layer into a font ID, e.g. VC_FONT_LAYER1 | VC_FONT_CP437.
+000000r 2               ;     * Every write is a command, even of the value already held.
+000000r 2               ;     * The destination is LxPAT × $800, sampled at the write; a later write
+000000r 2               ;       to L0PAT/L1PAT does not move a pending load.
+000000r 2               ;     * A reserved font ID ($01-$7F) is stored and does nothing else.
+000000r 2               ;     * One load is pending per layer; a second write for that layer replaces it.
+000000r 2               ;     * The load completes at the line start where vertical blank fires, before
+000000r 2               ;       VC_STAT0_F sets.  Until then the table keeps its old contents, and a
+000000r 2               ;       write there is overwritten.  So: read STAT0 to clear F, write
+000000r 2               ;       VC_REG_FONT, and wait for F before touching that range.
+000000r 2               ;     * A reset cancels every pending load.
+000000r 2               ;   Check VC_CAP_FONT in STAT6 first.
+000000r 2               VC_FONT_LAYER0      = $00                ; b7 clear: layer 0's pattern table (L0PAT × $800)
+000000r 2               VC_FONT_LAYER1      = $80                ; b7 set: layer 1's pattern table (L1PAT × $800)
+000000r 2               VC_FONT_CP437       = $00                ; Font $00: CP437, 6×8, 2,048 bytes (glyph n at n × 8)
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: VRAM ---
+000000r 2               VC_PALETTE          = $FC00              ; Palette at reset PALBASE: 256 entries of %0000RRRR, %GGGGBBBB
+000000r 2               VC_SPRITE_END       = $D0                ; Sprite Y that ends the list while VC_SPRCTRL_TERM is set
+000000r 2               
+000000r 2               ; --- Colour Constants (palette row 0) ---
+000000r 2               ;   The PICOVDP's default palette puts the sixteen TMS9918 colours in row 0
+000000r 2               ;   at their TMS9918 indices, so these name the same colours they always did.
+000000r 2               ;   At 1bpp they are the foreground and background nibbles, and for
+000000r 2               ;   VideoSetColor (the pen; its background nibble is also the border).
+000000r 2               ;   Index 0 is transparent unless the layer is opaque.
 000000r 2               ;   Pass as: (foreground << 4) | background
 000000r 2               ;   Example: white on black = $F0, green on black = $20
 000000r 2               TMS_TRANSPARENT     = $0
@@ -955,12 +1380,8 @@ Current file: Program.asm
 000000r 2               TMS_GRAY            = $E
 000000r 2               TMS_WHITE           = $F
 000000r 2               
-000000r 2               ; --- Monitor Entry Points ---
-000000r 2               ;   The machine code monitor lives at $EE00 and is entered normally via BRK.
-000000r 2               ;   These are useful if you want to jump there directly.
-000000r 2               MONITOR_ENTRY       := $EE00             ; Cold entry (from boot menu or user code)
-000000r 2               MONITOR_BRK_ENTRY   := $EE03             ; BRK entry (displays saved registers)
-000000r 2               
+000000r 1               .else
+000000r 1               .include "6502.inc"
 000000r 1               .endif
 000000r 1               
 000000r 1               .segment "CODE"
@@ -994,46 +1415,48 @@ Current file: Program.asm
 00000Cr 1                 ; --- VDP build only: refuse to run on BIOS 1.x ---
 00000Cr 1                 ; A program built with 6502-VDP.inc may call 2.x Kernal entries that are
 00000Cr 1                 ; bare RTS slots on 1.x, so it says so and returns to BASIC instead.
-00000Cr 1                 jsr KernalVersion             ; A = major, X = minor
-00000Cr 1                 cmp #2
-00000Cr 1                 bcs @Bios2
-00000Cr 1                 lda #<NeedsBios2Msg
-00000Cr 1                 ldy #>NeedsBios2Msg
-00000Cr 1                 jsr PrintStr
-00000Cr 1                 rts                           ; Return to BASIC
-00000Cr 1               @Bios2:
-00000Cr 1               .endif
-00000Cr 1               
-00000Cr 1                 ; === Your program starts here ===
-00000Cr 1               
-00000Cr 1                 ; Example: clear screen and print a message
-00000Cr 1  20 18 A0       jsr VideoClear                ; Clear video screen
-00000Fr 1               
-00000Fr 1  A9 rr          lda #<HelloMsg
-000011r 1  A0 rr          ldy #>HelloMsg
-000013r 1  20 90 A0       jsr PrintStr                  ; Print the message
-000016r 1               
-000016r 1               @WaitKey:
-000016r 1  20 03 A0       jsr Chrin                     ; Poll for a keypress (non-blocking)
-000019r 1  90 FB          bcc @WaitKey                  ; Loop until character available (C=1)
+00000Cr 1  20 7B A0       jsr KernalVersion             ; A = major, X = minor
+00000Fr 1  C9 02          cmp #2
+000011r 1  B0 08          bcs @Bios2
+000013r 1  A9 rr          lda #<NeedsBios2Msg
+000015r 1  A0 rr          ldy #>NeedsBios2Msg
+000017r 1  20 90 A0       jsr PrintStr
+00001Ar 1  60             rts                           ; Return to BASIC
+00001Br 1               @Bios2:
+00001Br 1               .endif
 00001Br 1               
-00001Br 1  20 18 A0       jsr VideoClear                ; Clear screen before returning
-00001Er 1  60             rts                           ; Return to BASIC
-00001Fr 1               
-00001Fr 1               ; =============================================================================
-00001Fr 1               ;   Data
-00001Fr 1               ; =============================================================================
-00001Fr 1               
-00001Fr 1               HelloMsg:
-00001Fr 1  48 65 6C 6C    .byte "Hello from Program!", CHAR_CR, CHAR_LF
-000023r 1  6F 20 66 72  
-000027r 1  6F 6D 20 50  
-000034r 1  50 72 65 73    .byte "Press any key to return to BASIC.", CHAR_CR, CHAR_LF, $00
-000038r 1  73 20 61 6E  
-00003Cr 1  79 20 6B 65  
-000058r 1               
-000058r 1               .ifdef VDP
-000058r 1               NeedsBios2Msg:
-000058r 1                 .byte "NEEDS BIOS 2 AND A 6502-PICOVDP", CHAR_CR, CHAR_LF, $00
-000058r 1               .endif
-000058r 1               
+00001Br 1                 ; === Your program starts here ===
+00001Br 1               
+00001Br 1                 ; Example: clear screen and print a message
+00001Br 1  20 18 A0       jsr VideoClear                ; Clear video screen
+00001Er 1               
+00001Er 1  A9 rr          lda #<HelloMsg
+000020r 1  A0 rr          ldy #>HelloMsg
+000022r 1  20 90 A0       jsr PrintStr                  ; Print the message
+000025r 1               
+000025r 1               @WaitKey:
+000025r 1  20 03 A0       jsr Chrin                     ; Poll for a keypress (non-blocking)
+000028r 1  90 FB          bcc @WaitKey                  ; Loop until character available (C=1)
+00002Ar 1               
+00002Ar 1  20 18 A0       jsr VideoClear                ; Clear screen before returning
+00002Dr 1  60             rts                           ; Return to BASIC
+00002Er 1               
+00002Er 1               ; =============================================================================
+00002Er 1               ;   Data
+00002Er 1               ; =============================================================================
+00002Er 1               
+00002Er 1               HelloMsg:
+00002Er 1  48 65 6C 6C    .byte "Hello from Program!", CHAR_CR, CHAR_LF
+000032r 1  6F 20 66 72  
+000036r 1  6F 6D 20 50  
+000043r 1  50 72 65 73    .byte "Press any key to return to BASIC.", CHAR_CR, CHAR_LF, $00
+000047r 1  73 20 61 6E  
+00004Br 1  79 20 6B 65  
+000067r 1               
+000067r 1               .ifdef VDP
+000067r 1               NeedsBios2Msg:
+000067r 1  4E 45 45 44    .byte "NEEDS BIOS 2 AND A 6502-PICOVDP", CHAR_CR, CHAR_LF, $00
+00006Br 1  53 20 42 49  
+00006Fr 1  4F 53 20 32  
+000089r 1               .endif
+000089r 1               
