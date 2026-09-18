@@ -4,7 +4,7 @@
 ;
 ;   CPU:       WDC 65C02S
 ;   Video:     6502-PICOVDP (SPEC draft 0.5)
-;   BIOS:      v2.0
+;   BIOS:      v2.0.2
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
 ;   Include this file in programs for an ACE whose video card is a
@@ -268,6 +268,12 @@ VDP_P0              := $0398             ; 1 byte  — Parameter block for VdpSp
 VDP_P1              := $0399             ; 1 byte
 VDP_P2              := $039A             ; 1 byte
 VDP_P3              := $039B             ; 1 byte
+VID_BORDER          := $039C             ; 1 byte  — The border the console shows: register 7's
+                                         ;   low nibble.  KernalInit sets $0F (the pen's
+                                         ;   background).  VideoSetColor and VideoSetPen set it
+                                         ;   to the pen's background; COLOR fg,bg,border sets it
+                                         ;   on its own.  Register 7 is write-only, so this is
+                                         ;   what InitVideo puts back (v2.0.2)
 
 
 ; =============================================================================
@@ -330,8 +336,12 @@ InitVideo           := $A015             ; Put the PICOVDP in the Kernal's Text-
                                          ;   built-in font into $0800 (VdpLoadFont, font $00) and
                                          ;   waits for it: returns after the next vertical blank,
                                          ;   up to a frame later.  Restores palette row 0, sets
-                                         ;   the border from VID_PEN, turns the display on and
+                                         ;   the border to VID_BORDER, turns the display on and
                                          ;   sets VID_MODE = $01
+                                         ;   The display is off while all of that happens, and a
+                                         ;   blanked card shows the border over the whole screen,
+                                         ;   so a caller with a border of its own sets VID_BORDER
+                                         ;   before the console comes up (v2.0.2)
                                          ;   Does not clear the screen: the name and attribute
                                          ;   tables are shown as they are, unscrolled
                                          ;   A program that switched modes, moved tables or
@@ -374,10 +384,11 @@ VideoScroll         := $A024             ; Scroll screen up one line, in hardwar
 
 VideoSetColor       := $A027             ; Set the pen for later output, and the border
                                          ;   In: A = fg<<4 | bg (palette row 0, see Colour Constants)
-                                         ;   VID_PEN = A, and register 7 (VC_REG_COLOR) = A: its
-                                         ;   low nibble is the border, so the border follows the
-                                         ;   background.  Characters already on screen keep
-                                         ;   their colours; VideoClear fills with the pen
+                                         ;   VID_PEN = A, VID_BORDER = A & $0F, and register 7
+                                         ;   (VC_REG_COLOR) = A: its low nibble is the border, so
+                                         ;   the border follows the background.  Characters
+                                         ;   already on screen keep their colours; VideoClear
+                                         ;   fills with the pen
                                          ;   Brings the console up
                                          ;   Skips silently if no video card is fitted
                                          ;   Modifies: Flags, A
