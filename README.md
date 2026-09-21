@@ -12,6 +12,13 @@ Programs for this system are loaded into RAM at `$0800` and executed from BASIC.
 
 The template builds two ways from the same source: `make` for any ACE on BIOS 1.x with a TMS9918A, and `make VDP=1` for an ACE converted to a [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) on BIOS 2.x. See [Building for the 6502-PICOVDP](#building-for-the-6502-picovdp).
 
+When the program works, [6502-ASM](https://github.com/acwright/6502-ASM) is
+where a small one goes: demos, samples, scratchpads and tests, each in a
+directory of its own. [6502-BAS](https://github.com/acwright/6502-BAS) and
+[6502-C](https://github.com/acwright/6502-C) are the same collection for BASIC
+and C. Anything bigger than a directory — a game, an application, anything with
+releases of its own — gets a repository of its own instead.
+
 ### How It Works
 
 1. The program is loaded into RAM at `$0800` — normally with BASIC's `LOAD`, from CompactFlash or over serial
@@ -240,8 +247,10 @@ three loaders had this problem.
 - [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind the Kernal jump table: `6502.inc` is its 1.6 API, `6502-VDP.inc` its 2.x API
 - [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) — the video card `6502-VDP.inc` is for
 - [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run a program without hardware (`make run`)
-- [6502-CRT](https://github.com/acwright/6502-CRT) — the same idea for cartridge ROMs
-- [6502-ASM](https://github.com/acwright/6502-ASM) — worked assembly examples
+- [6502-CRT](https://github.com/acwright/6502-CRT) — the same idea for cartridge ROMs and banked Flash Carts
+- [6502-BIN](https://github.com/acwright/6502-BIN) — the same idea for a raw binary with no BASIC stub
+- [6502-ASM](https://github.com/acwright/6502-ASM) — where small assembly programs live: demos, samples and tests, with worked examples of this template
+- [6502-BAS](https://github.com/acwright/6502-BAS) / [6502-C](https://github.com/acwright/6502-C) — the same collection for BASIC listings and for C
 - [6502-DOCS](https://github.com/acwright/6502-DOCS) — the documentation site: the cross-development and assembly guides, and the printable reference cards
 - [cffs](https://github.com/acwright/cffs) / [bin2woz](https://github.com/acwright/bin2woz) — the tools behind `make cf` and `make woz`
 
