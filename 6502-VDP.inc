@@ -56,7 +56,7 @@
 ;   $8400-$87FF   IO 2: Banked RAM High (256 × ~1 KB banks)
 ;   $8800-$881F   IO 3: RTC (DS1511Y)
 ;   $8C00-$8C07   IO 4: Storage (CompactFlash, 8-bit IDE)
-;   $9000-$9003   IO 5: Serial (R65C51 ACIA)
+;   $9000-$9003   IO 5: Serial (R6551AP ACIA)
 ;   $9400-$940F   IO 6: GPIO (65C22 VIA — keyboard & joysticks)
 ;   $9800-$981C   IO 7: Sound (SID / ARMSID)
 ;   $9C00-$9C03   IO 8: Video (6502-PICOVDP, two port pairs)
@@ -138,7 +138,7 @@
 ;   IO_MODE
 ;   -------
 ;   Bit 0 of IO_MODE selects the console output device:
-;     0 = Video (6502-PICOVDP)    1 = Serial (R65C51)
+;     0 = Video (6502-PICOVDP)    1 = Serial (R6551AP)
 ;   Chrout ($A000) dispatches automatically based on IO_MODE.
 ;   Use SetIOMode / GetIOMode to change or query the active console.
 ;
@@ -201,7 +201,7 @@ HW_RAM_L            = %00000001          ; Bit 0: RAM card low  (IO 1, $8000-$83
 HW_RAM_H            = %00000010          ; Bit 1: RAM card high (IO 2, $8400-$87FF)
 HW_RTC              = %00000100          ; Bit 2: RTC card      (IO 3, DS1511Y)
 HW_CF               = %00001000          ; Bit 3: Storage card   (IO 4, CompactFlash)
-HW_SC               = %00010000          ; Bit 4: Serial card    (IO 5, R65C51)
+HW_SC               = %00010000          ; Bit 4: Serial card    (IO 5, R6551AP)
 HW_GPIO             = %00100000          ; Bit 5: GPIO card      (IO 6, 65C22 VIA — keyboard/joysticks)
 HW_SID              = %01000000          ; Bit 6: Sound card     (IO 7, SID/ARMSID)
 HW_VID              = %10000000          ; Bit 7: Video card     (IO 8, a 6502-PICOVDP with the built-in font)
@@ -485,7 +485,7 @@ ReadJoystick2       := $A04B             ; Read joystick 2 (VIA Port A)
                                          ;   Out: A = bitmask (active low, see above)
                                          ;   Modifies: Flags, A
 
-; --- Serial (R65C51) ---
+; --- Serial (R6551AP) ---
 InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
                                          ;   Modifies: A
 
@@ -899,7 +899,7 @@ XMODEM_BLKSZ        = 128                ; Data bytes per block
 XMODEM_MAXRETRY     = 10                 ; Max retries per block during transfer
 XMODEM_STARTRETRY   = 60                 ; Retries waiting for initial connect (~60s)
 
-; --- Serial Card (R65C51 ACIA) (IO 5: $9000-$9003) ---
+; --- Serial Card (R6551AP ACIA) (IO 5: $9000-$9003) ---
 ;   Default config after InitSC: 8-N-1, 19200 baud, RX IRQ enabled
 SC_DATA             := $9000             ; R/W — Data register
 SC_RESET            := $9001             ; Write — Programmatic reset (write any value)

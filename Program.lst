@@ -41,7 +41,7 @@ Current file: Program.asm
 000000r 2               ;   $8400-$87FF   IO 2: Banked RAM High (256 × ~1 KB banks)
 000000r 2               ;   $8800-$881F   IO 3: RTC (DS1511Y)
 000000r 2               ;   $8C00-$8C07   IO 4: Storage (CompactFlash, 8-bit IDE)
-000000r 2               ;   $9000-$9003   IO 5: Serial (R65C51 ACIA)
+000000r 2               ;   $9000-$9003   IO 5: Serial (R6551AP ACIA)
 000000r 2               ;   $9400-$940F   IO 6: GPIO (65C22 VIA — keyboard & joysticks)
 000000r 2               ;   $9800-$981C   IO 7: Sound (SID / ARMSID)
 000000r 2               ;   $9C00-$9C01   IO 8: Video (TMS9918 / pico9918)
@@ -88,7 +88,7 @@ Current file: Program.asm
 000000r 2               ;   IO_MODE
 000000r 2               ;   -------
 000000r 2               ;   Bit 0 of IO_MODE selects the console output device:
-000000r 2               ;     0 = Video (TMS9918)    1 = Serial (R65C51)
+000000r 2               ;     0 = Video (TMS9918)    1 = Serial (R6551AP)
 000000r 2               ;   Chrout ($A000) dispatches automatically based on IO_MODE.
 000000r 2               ;   Use SetIOMode / GetIOMode to change or query the active console.
 000000r 2               ;
@@ -150,7 +150,7 @@ Current file: Program.asm
 000000r 2               HW_RAM_H            = %00000010          ; Bit 1: RAM card high (IO 2, $8400-$87FF)
 000000r 2               HW_RTC              = %00000100          ; Bit 2: RTC card      (IO 3, DS1511Y)
 000000r 2               HW_CF               = %00001000          ; Bit 3: Storage card   (IO 4, CompactFlash)
-000000r 2               HW_SC               = %00010000          ; Bit 4: Serial card    (IO 5, R65C51)
+000000r 2               HW_SC               = %00010000          ; Bit 4: Serial card    (IO 5, R6551AP)
 000000r 2               HW_GPIO             = %00100000          ; Bit 5: GPIO card      (IO 6, 65C22 VIA — keyboard/joysticks)
 000000r 2               HW_SID              = %01000000          ; Bit 6: Sound card     (IO 7, SID/ARMSID)
 000000r 2               HW_VID              = %10000000          ; Bit 7: Video card     (IO 8, TMS9918/pico9918)
@@ -362,7 +362,7 @@ Current file: Program.asm
 000000r 2                                                        ;   Out: A = bitmask (active low, see above)
 000000r 2                                                        ;   Modifies: Flags, A
 000000r 2               
-000000r 2               ; --- Serial (R65C51) ---
+000000r 2               ; --- Serial (R6551AP) ---
 000000r 2               InitSC              := $A04E             ; Initialize serial card (8-N-1, 19200 baud)
 000000r 2                                                        ;   Modifies: A
 000000r 2               
@@ -658,7 +658,7 @@ Current file: Program.asm
 000000r 2               XMODEM_MAXRETRY     = 10                 ; Max retries per block during transfer
 000000r 2               XMODEM_STARTRETRY   = 60                 ; Retries waiting for initial connect (~60s)
 000000r 2               
-000000r 2               ; --- Serial Card (R65C51 ACIA) (IO 5: $9000-$9003) ---
+000000r 2               ; --- Serial Card (R6551AP ACIA) (IO 5: $9000-$9003) ---
 000000r 2               ;   Default config after InitSC: 8-N-1, 19200 baud, RX IRQ enabled
 000000r 2               SC_DATA             := $9000             ; R/W — Data register
 000000r 2               SC_RESET            := $9001             ; Write — Programmatic reset (write any value)
