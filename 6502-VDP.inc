@@ -4,7 +4,7 @@
 ;
 ;   CPU:       WDC 65C02S
 ;   Video:     6502-PICOVDP (SPEC draft 0.5)
-;   BIOS:      v2.0.2
+;   BIOS:      v2.1.0
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
 ;   Include this file in programs for an ACE whose video card is a
@@ -79,7 +79,7 @@
 ;   checked — if non-zero, execution jumps there (cartridge takeover).
 ;   Otherwise a console check halts if no video/serial is found, and the
 ;   machine goes straight to BASIC, which prints its header:
-;     AC6502 BIOS v2.0
+;     AC6502 BIOS v2.1
 ;     BASIC v2.0 NNNNN BYTES FREE
 ;   On video the header is the console's first use, which brings the Text
 ;   console up (see VIDEO CONSOLE).
@@ -246,6 +246,13 @@ PRG_IMAGE_END       := $038E             ; 2 bytes — End address of a program 
 
 ; NVRAM save slots (v1.6):
 NV_ID               := $0390             ; 1 byte  — Owner ID input for NvWrite ($01-$FF; $00 is refused — that is NvErase)
+
+; Boot CF probe diagnostics (v2.1): left by the probe for a PEEK after boot.
+CF_PROBE_POLLS      := $0376             ; 2 bytes — Polls (100 cycles each, 0.1 ms at 1 MHz) that found the
+                                         ;   CF card not ready.  30,000 = it never came ready; 0 with HW_CF
+                                         ;   clear = the slot was empty (recognised in two reads)
+CF_PROBE_STAT       := $0378             ; 1 byte  — The first status byte the probe read: $80 from a busy
+                                         ;   card, $8C from an empty slot (open bus)
 
 ; Video variables (v2.0):
 VID_PEN             := $0391             ; 1 byte  — Attribute byte for new output, fg<<4 | bg
@@ -1214,7 +1221,7 @@ VC_REG_FONT         = $30                ; Load a built-in font: b7 layer, b6:0 
 
 ; --- BIOS Version ---
 BIOS_VERSION_MAJOR  = 2
-BIOS_VERSION_MINOR  = 0
+BIOS_VERSION_MINOR  = 1
 
 ; --- NVRAM Save Slots (v1.6) ---
 NV_SLOTS            = 16                 ; Save slots in RTC NVRAM
