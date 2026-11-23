@@ -4,7 +4,7 @@
 ;
 ;   CPU:       WDC 65C02S
 ;   Video:     6502-PICOVDP (SPEC draft 0.5)
-;   BIOS:      v2.1.0
+;   BIOS:      v2.2.0
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
 ;   Include this file in programs for an ACE whose video card is a
@@ -142,6 +142,14 @@
 ;   Chrout ($A000) dispatches automatically based on IO_MODE.
 ;   Use SetIOMode / GetIOMode to change or query the active console.
 ;
+;   Bit 1 (IO_MIRROR, v2.2) mirrors a video console to serial: with bit 0
+;   clear, every character Chrout puts on the screen goes to the serial port
+;   as well, so a terminal sees BASIC's replies.  POKE 774,2 or SetIOMode
+;   with A = 2 turns it on; every boot turns it off.  It means nothing when
+;   bit 0 is set or there is no serial card.  It costs speed only when output
+;   is continuous (a character holds the line ~520 us at 19200 baud), and a
+;   stalled line never holds up the screen (see MIRROR_STALL).
+;
 ;   CALLING CONVENTION
 ;   ------------------
 ;   Kernal routines are called via JSR to the jump table addresses below.
@@ -189,7 +197,9 @@ IRQ_PTR             := $0300             ; 2 bytes — IRQ handler vector (writa
 BRK_PTR             := $0302             ; 2 bytes — BRK handler vector (writable; default: the BRK report, then BASIC)
 NMI_PTR             := $0304             ; 2 bytes — NMI handler vector (writable; default: RTI)
 
-IO_MODE             := $0306             ; 1 byte  — Console output mode (bit 0: 0=video, 1=serial)
+IO_MODE             := $0306             ; 1 byte  — Console output mode (bit 0: 0=video, 1=serial;
+                                         ;   bit 1: mirror video to serial, v2.2)
+IO_MIRROR           = %00000010          ; IO_MODE bit 1: with bit 0 clear, Chrout sends to serial as well as video
 VID_CURSOR_X        := $0307             ; 1 byte  — Video cursor column (0-39)
 VID_CURSOR_Y        := $0308             ; 1 byte  — Video cursor row (0-23)
 
@@ -253,6 +263,10 @@ CF_PROBE_POLLS      := $0376             ; 2 bytes — Polls (100 cycles each, 0
                                          ;   clear = the slot was empty (recognised in two reads)
 CF_PROBE_STAT       := $0378             ; 1 byte  — The first status byte the probe read: $80 from a busy
                                          ;   card, $8C from an empty slot (open bus)
+
+; Serial mirror (v2.2):
+MIRROR_STALL        := $0379             ; 1 byte  — b7 set = the line took no mirrored byte last time, so
+                                         ;   the next gets one look; cleared by the first byte it takes
 
 ; Video variables (v2.0):
 VID_PEN             := $0391             ; 1 byte  — Attribute byte for new output, fg<<4 | bg
@@ -326,7 +340,8 @@ BufferSize          := $A00C             ; Get number of unread bytes in input b
 
 ; --- IO Mode ---
 SetIOMode           := $A00F             ; Set IO_MODE
-                                         ;   In: A = mode (bit 0: 0=video, 1=serial)
+                                         ;   In: A = mode (bit 0: 0=video, 1=serial;
+                                         ;       2 = video mirrored to serial)
 
 GetIOMode           := $A012             ; Get IO_MODE
                                          ;   Out: A = current IO_MODE
@@ -483,6 +498,20 @@ InitKB              := $A045             ; Initialize VIA for keyboard input
 ;
 ;   Both routines release both encoders (KBDisable), read the port, then
 ;   re-enable them (KBEnable).  The interrupt state is left alone.
+;
+;   Read a stick at most once a frame (after VSYNC or a timer tick), never
+;   back to back.  Each call takes both ports away from the keyboard
+;   encoders for a few hundred microseconds, and an encoder can neither scan
+;   the keyboard nor hand over a key while it is released: a loop that calls
+;   ReadJoystick1 as fast as it can leaves the keyboard dead.  Once a frame
+;   also needs a debounce: act on a press or a release only when two reads in
+;   a row agree, or a bouncing switch is taken twice.
+;
+;   A program that uses the sticks and not the keyboard can call KBDisable
+;   once and then read GPIO_PORTB (joystick 1) and GPIO_PORTA (joystick 2)
+;   directly, with no wait per read.  A program that uses both gets a key
+;   typed while a stick is held when the stick lets go, if a stick holds a
+;   line the key's code needs.
 
 ReadJoystick1       := $A048             ; Read joystick 1 (VIA Port B)
                                          ;   Out: A = bitmask (active low, see above)
@@ -838,6 +867,7 @@ RTC_RAM_ADDR        := $8810             ; NVRAM address register
 RTC_RAM_DATA        := $8813             ; NVRAM data register
 ; Control Register B bits:
 RTC_CTRL_B_TE       := %10000000         ; Transfer Enable — 1 = counters update the user registers once a second, 0 = inhibited
+RTC_CTRL_B_CS       := %01000000         ; Crystal Select — the DS1501's oscillator load: 0 = 6 pF crystal, 1 = 12.5 pF; a DS1511Y wants 0 (v2.2's probe clears it)
 RTC_CTRL_B_BME      := %00100000         ; Burst Mode Enable — 1 = RTC_RAM_ADDR auto-increments on each access of RTC_RAM_DATA
 ; Month register ($8805) — the upper 3 bits are oscillator/SQW control, not month data.
 ; Always mask with RTC_MON_MASK when reading the month, and preserve these bits on write.
@@ -1221,7 +1251,7 @@ VC_REG_FONT         = $30                ; Load a built-in font: b7 layer, b6:0 
 
 ; --- BIOS Version ---
 BIOS_VERSION_MAJOR  = 2
-BIOS_VERSION_MINOR  = 1
+BIOS_VERSION_MINOR  = 2
 
 ; --- NVRAM Save Slots (v1.6) ---
 NV_SLOTS            = 16                 ; Save slots in RTC NVRAM

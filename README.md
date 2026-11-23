@@ -72,6 +72,7 @@ The system is already fully initialized when your program runs. Key entry points
 | `$A000` | `Chrout` | Output character (routed by IO_MODE) |
 | `$A003` | `Chrin` | Read character from input buffer (non-blocking — C=1 with the character in A, C=0 if none; loop for blocking behaviour) |
 | `$A00C` | `BufferSize` | Number of unread bytes in input buffer |
+| `$A00F` | `SetIOMode` | Set console output mode (A=0 video, A=1 serial, A=2 video mirrored to serial on BIOS 1.8 and 2.2 or later) |
 | `$A018` | `VideoClear` | Clear screen and reset cursor |
 | `$A01B` | `VideoPutChar` | Write character at cursor position |
 | `$A01E` | `VideoSetCursor` | Set cursor position (X=col, Y=row) |
