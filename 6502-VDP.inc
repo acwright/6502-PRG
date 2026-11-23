@@ -79,7 +79,7 @@
 ;   checked — if non-zero, execution jumps there (cartridge takeover).
 ;   Otherwise a console check halts if no video/serial is found, and the
 ;   machine goes straight to BASIC, which prints its header:
-;     AC6502 BIOS v2.1
+;     AC6502 BIOS v2.2
 ;     BASIC v2.0 NNNNN BYTES FREE
 ;   On video the header is the console's first use, which brings the Text
 ;   console up (see VIDEO CONSOLE).
